@@ -351,10 +351,43 @@ final class GlBridge implements Runnable {
 
     private static int[] one() { return new int[1]; }
 
+    private static final java.util.regex.Pattern SHADOW_UNIFORM =
+            java.util.regex.Pattern.compile("uniform\\s+(?:lowp\\s+|mediump\\s+|highp\\s+)?sampler2DShadow\\s+(\\w+)\\s*;");
+
+    /**
+     * Unity takes the Adreno for an ES3 device and writes its "#version 100" shadow shaders with
+     * GL_EXT_shadow_samplers, which this driver does not offer to ES2 shaders: every shader that receives a shadow
+     * failed to compile. The shadow map becomes a plain depth sampler and the comparison is done in the shader
+     * (one tap, so the edge is hard where the driver would have filtered it).
+     */
+    private static String shadowSamplers(String src) {
+        if (!src.contains("sampler2DShadow")) return src;
+        java.util.regex.Matcher m = SHADOW_UNIFORM.matcher(src);
+        StringBuffer out = new StringBuffer();
+        boolean helpers = false;
+        while (m.find()) {
+            String r = "uniform highp sampler2D " + m.group(1) + ";";
+            if (!helpers) {
+                helpers = true;
+                r += "\nfloat sg_shadow2D(highp sampler2D s, highp vec3 c) { return step(c.z, texture2D(s, c.xy).r); }"
+                        + "\nfloat sg_shadow2DProj(highp sampler2D s, highp vec4 c) { return sg_shadow2D(s, c.xyz / c.w); }";
+            }
+            m.appendReplacement(out, java.util.regex.Matcher.quoteReplacement(r));
+        }
+        m.appendTail(out);
+        return out.toString()
+                .replace("#extension GL_EXT_shadow_samplers : enable", "")
+                .replace("#extension GL_EXT_shadow_samplers : require", "")
+                .replace("shadow2DProjEXT", "sg_shadow2DProj")
+                .replace("shadow2DEXT", "sg_shadow2D");
+    }
+
     // ---------------------------------------------------------------- dispatch
 
     private void dispatch(int op, int plen) {
         ByteBuffer b = pay;
+        // Shadow maps are sampled as plain depth (see shadowSamplers), so the texture must not compare by itself.
+        if (op == GlOps.OP_glTexParameteri && b.getInt(b.position() + 4) == 0x884C /* TEXTURE_COMPARE_MODE */) return;
         if (GlOps.exec(op, b, ids)) return;
         switch (op) {
             case GlOps.OP_SWAP: swap(); break;
@@ -430,7 +463,7 @@ final class GlBridge implements Runnable {
                 int id = i(), n = i();
                 byte[] src = new byte[n];
                 pay.get(src);
-                GLES30.glShaderSource(ids.shader.get(id), new String(src, LATIN1));
+                GLES30.glShaderSource(ids.shader.get(id), shadowSamplers(new String(src, LATIN1)));
                 break;
             }
             case GlOps.OP_UNIFORM_V: uniformV(); break;
