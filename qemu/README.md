@@ -47,5 +47,18 @@ Diff of qemu-src vs nova3probe's qemu-src (11.1.2). Test scene: 33.6 fps -> ~42 
 - helper-defs.h: vfp_* helpers are TCG_CALL_NO_RWG (no guest register spill around scalar VFP).
 - vfp_helper.c / translate-vfp.c: fast VCMP/VCMPE (inline TCG, off with QEMU_STRICT_FP=1).
 - translator.c: translator_use_goto_tb allows cross-page direct chaining (user-only semantics).
+- include/fpu/softfloat.h: nova3_fpcr_default() is empty under NOVA3_NEON_NOFPCR (that variant never leaves FPCR
+  switched); the thread-local read was the first instruction of every scalar VFP helper. armbench vfp 225 -> 216 ms.
+- Inline scalar VFP (tcg-opc.h, tcg.c, tcg-op.c, tcg/aarch64, cpu.h, hflags.c, op_helper.c, translate*.c): new TCG ops
+  hfadd/hfsub/hfmul/hfdiv (I32 = single, I64 = double; aarch64 host only, V30 reserved) emit fmov/op/fmov instead of a
+  helper call for VADD/VSUB/VMUL/VDIV/VMLA/VMLS/VNMUL.. in translate-vfp.c. Used only in TBs translated with the new
+  dynamic flag TBFLAG_A32.FASTFP (FPSCR: round to nearest, no FZ, no DN), computed in hflags.c and in the fast lookup
+  in op_helper.c. Off with QEMU_STRICT_FP=1 or SHADOWGUN_INLINE_FP=0. armbench vfp 200 -> 160 ms; fptest/cmptest
+  hashes equal to strict and to the previous build.
+- vec_helper.c: Neon f32 add/sub/mul/mla/mls (vector and by-scalar) on a whole 128-bit register with host Neon when all
+  four lanes pass the neon_f32_host() rule (operands plain, results settled), else the per-element loop; vceq/vcge/vcgt/
+  vmax/vmin on the host when both operands are plain in every lane. armbench neon 48 -> 28 ms. Test: `neoncmptest.c`
+  (compares and min/max, hash equal to QEMU_STRICT_FP=1 and to the previous build).
+- cpu.h: arm_a32_fastfp() reads the FPCR control bits (one load) - the bitfield version cost ~8% on armbench calls.
 - meson.build: hardening flags (-ftrivial-auto-var-init, -fzero-call-used-regs) removed.
 Tests: cmptest.c hash d6137e57, fptest hash 94e3b209 (fast == strict == Debian qemu 7.2).
