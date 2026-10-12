@@ -124,7 +124,10 @@ AArch64-хост (подробно в [qemu/README.md](qemu/README.md)):
 - `android-sdk/` — build-tools 34.0.0, platform 34, platform-tools;
 - `sdl-arm/` — SDL2 под armhf (исходники в `third_party/SDL2-2.0.22.tar.gz`);
 - системный armhf-тулчейн (`gcc-arm-linux-gnueabihf`, `g++-arm-linux-gnueabihf`) и Docker для qemu;
-- `gamebin/` — ваш APK игры: из него при сборке берётся значок приложения.
+- `gamebin/` — ваши файлы игры: APK версии 1.7.0 и её данные (cache-архив `.zip` или `main.*.obb`).
+  Из APK при сборке берётся значок приложения; оба файла затем кладутся на телефон (см. [Установка](#установка));
+- `sgdata/` — только для запуска на ПК: те же файлы в распакованном виде (`lib/armeabi-v7a/*.so`, `base.apk`,
+  `Android/obb/com.madfingergames.shadowgun/main.170200014.com.madfingergames.shadowgun.obb`).
 
 ```sh
 source env.sh
@@ -132,6 +135,7 @@ source env.sh
 tools/build_install.sh             # порт + APK + установка на телефон по adb
 tools/build_install.sh noinstall   # то же без установки
 tools/make_release.sh              # релизный APK, архив исходников и INSTALL.txt в release/<версия>/
+tools/run_local.sh 60              # запуск на ПК (qemu-arm хоста + программный GL, медленно), лог logs/local.log
 ```
 
 Телефон из WSL виден через виндовый `adb.exe`: используйте обёртку `tools/adb`.
