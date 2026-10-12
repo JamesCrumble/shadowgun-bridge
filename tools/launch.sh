@@ -5,5 +5,5 @@ A=$P/tools/adb
 if [ "${1:-}" = install ]; then
   $A install -r "$(wslpath -w $P/Shadowgun-Bridge-debug.apk)" || exit 1
 fi
-$A shell am force-stop com.eaprules.shadowgun
-$A shell am start -n com.eaprules.shadowgun/.MainActivity
+$A shell am force-stop com.jamescrumble.shadowgun
+$A shell am start -n com.jamescrumble.shadowgun/.MainActivity

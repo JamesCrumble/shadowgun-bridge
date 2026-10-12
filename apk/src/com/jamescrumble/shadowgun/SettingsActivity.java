@@ -1,4 +1,4 @@
-package com.eaprules.shadowgun;
+package com.jamescrumble.shadowgun;
 
 import android.app.Activity;
 import android.content.Context;

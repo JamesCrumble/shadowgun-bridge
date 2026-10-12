@@ -1,10 +1,10 @@
 #!/bin/sh
 # Where the qemu main thread runs: cpuset/cgroup, CPU and its frequency, cluster max freqs. Read-only.
-P=${NOVA3_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}
+P=${SG_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}
 A=$P/tools/adb
 $A shell '
 Q=$(ps -A -o PID,NAME | grep libqemu | awk "{print \$1}" | head -1)
-APP=$(pidof com.eaprules.nova3)
+APP=$(pidof com.jamescrumble.shadowgun)
 echo "app=$APP qemu=$Q"
 echo "== cpuset/cgroup app"; cat /proc/$APP/cpuset; cat /proc/$APP/cgroup | head -5
 echo "== cpuset/cgroup qemu"; cat /proc/$Q/cpuset; cat /proc/$Q/cgroup | head -5

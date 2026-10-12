@@ -23,8 +23,8 @@ Android-телефонах, в которых нет поддержки AArch32.
 Готовая сборка лежит на странице [Releases](https://github.com/JamesCrumble/shadowgun-bridge/releases):
 `Shadowgun-Bridge-<версия>.apk` и `INSTALL.txt`.
 
-1. Установите APK (пакет `com.eaprules.shadowgun`).
-2. Положите в `/sdcard/Android/data/com.eaprules.shadowgun/files/` два файла: оригинальный APK игры 1.7.0
+1. Установите APK (пакет `com.jamescrumble.shadowgun`).
+2. Положите в `/sdcard/Android/data/com.jamescrumble.shadowgun/files/` два файла: оригинальный APK игры 1.7.0
    и её данные (cache-архив `.zip` или `main.170200014.com.madfingergames.shadowgun.obb`).
    Имена не важны, важны расширения.
 3. Откройте приложение, при необходимости поменяйте настройки и нажмите «Играть».
@@ -162,7 +162,7 @@ docker run --rm -u 1000:1000 -e HOME=/tmp -v "$PWD":/work shadowgun-qemu-build \
   число GL-команд, загрузку потоков, текущую частоту и потолок частоты ядра, `uclamp`.
 - Профиль кода игры пишется в лог, пока включена настройка «Профилирование в логе»; поток выбирается ключом
   `SHADOWGUN_PC_PROF_THREAD=<имя потока>` в `settings.txt`, разбор — `tools/pcprof.py`.
-- Профиль самого qemu: `simpleperf record --app com.eaprules.shadowgun -p <pid qemu> -e cpu-clock`
+- Профиль самого qemu: `simpleperf record --app com.jamescrumble.shadowgun -p <pid qemu> -e cpu-clock`
   (приложение `profileable`), адреса сопоставляются с `nm qemu/out/qemu-arm-E`.
 - Вставку VFP в код можно выключить ключом `SHADOWGUN_INLINE_FP=0` в `settings.txt` (в окружение qemu
   из него попадают только ключи `SHADOWGUN_*`). `QEMU_STRICT_FP=1` (чистый softfloat) задаётся переменной

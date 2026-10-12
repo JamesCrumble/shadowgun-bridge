@@ -44,8 +44,8 @@
 - `./build.sh` -> `build/shadowgun` (armhf). `jdk/ android-sdk/ sdl-arm/` — симлинки на соседний проект.
 - Локально на ПК (qemu-arm хоста + Mesa llvmpipe, медленно): `tools/run_local.sh [сек]`, лог `logs/local.log`,
   скриншоты `ctl/shot_*.bmp` каждые `SHADOWGUN_SHOT_EVERY` кадров (`tools/bmp2png.py`), дайджест — `tools/iter_local.sh`.
-- APK: `tools/build_install.sh [noinstall]` -> `Shadowgun-Bridge-debug.apk` (пакет `com.eaprules.shadowgun`).
-  На телефоне в `Android/data/com.eaprules.shadowgun/files/` кладутся APK игры и cache-zip (или `.obb`).
+- APK: `tools/build_install.sh [noinstall]` -> `Shadowgun-Bridge-debug.apk` (пакет `com.jamescrumble.shadowgun`).
+  На телефоне в `Android/data/com.jamescrumble.shadowgun/files/` кладутся APK игры и cache-zip (или `.obb`).
 
 ## Правила работы (как в соседних проектах)
 - По-русски, кратко. Установка APK + перезапуск — можно; любые другие команды на телефоне — после явного «да».
@@ -88,13 +88,13 @@
 - Env-переключатели: `QEMU_STRICT_FP=1` (отключает быстрый FP и inline vcmp), `SHADOWGUN_INLINE_LOOKUP=1` (inline-проба jump cache,
   по умолчанию выкл: прироста не дала, работа переехала в JIT-код).
 - Диагностика: `SHADOWGUN_PC_PROF=1` (`src/pc_prof.cpp`, разбор `tools/pcprof.py`), `src/syscall_prof.cpp`, телеметрия потоков
-  (`PerfHint.java`) в строке `[gl] frames`. Профиль хоста: `simpleperf record --app com.eaprules.shadowgun -p <pid qemu> -e cpu-clock`
+  (`PerfHint.java`) в строке `[gl] frames`. Профиль хоста: `simpleperf record --app com.jamescrumble.shadowgun -p <pid qemu> -e cpu-clock`
   (в манифесте `profileable shell=true`; без `--app` и с `cpu-cycles` не работает).
 - Профиль после E3 (UnityMain): `helper_arm_lookup_tb_ptr` 16% (было 23%), `float32_add/mul` ~8% (уже быстрый хост-FPU путь из nova3),
   libunity 77% гостевого времени (культинг/рендер, ~30% скалярный VFP).
 - Узкое место - однопоточный UnityMain (~17 мс CPU/кадр, 70-75% busy). GL-мост не узкий (busy 5-8%).
 - Зажим ОС (uclamp.max 240 на самом тяжёлом потоке + средние ядра 1363 МГц) даёт 17 fps; приходит и уходит сам, не из нашего ADPF.
-  `cmd game mode performance com.eaprules.shadowgun` включён: заметного эффекта нет (42-43.5 fps, при 2649 МГц на cpu7 всего 43.5 -
+  `cmd game mode performance com.jamescrumble.shadowgun` включён: заметного эффекта нет (42-43.5 fps, при 2649 МГц на cpu7 всего 43.5 -
   значит, прирост от частоты малый, упор не только в частоту).
 - Не помогло/не применимо: NEON-патч Matrix4 (из mass-effect; в Shadowgun уже NEON), kuser-CAS патч из nova3 (в libil2cpp 1 вхождение,
   в libunity 0), inline-проба jump cache.

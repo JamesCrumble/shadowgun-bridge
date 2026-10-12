@@ -1,4 +1,4 @@
-package com.eaprules.shadowgun;
+package com.jamescrumble.shadowgun;
 
 import android.opengl.EGL14;
 import android.opengl.EGLConfig;

@@ -1,4 +1,4 @@
-package com.eaprules.shadowgun;
+package com.jamescrumble.shadowgun;
 
 import android.content.Context;
 import android.media.AudioAttributes;
