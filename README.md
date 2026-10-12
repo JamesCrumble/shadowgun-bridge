@@ -173,6 +173,8 @@ docker run --rm -u 1000:1000 -e HOME=/tmp -v "$PWD":/work shadowgun-qemu-build \
 GPL-3.0, см. [LICENSE](LICENSE). Происхождение заимствованных частей и их лицензии — в [NOTICE.md](NOTICE.md).
 Патч qemu — GPL-2.0-or-later, как сам QEMU.
 
-Каркас порта восходит к PortMaster-портам, созданным EapRules, и к gmloader-next (JohnnyonFlame).
+Порт Shadowgun, APK-обёртка, GL-мост и правки qemu написаны в этом проекте. Загрузчик библиотек взят
+из gmloader-next (JohnnyonFlame), а исходная основа JNI, переходников libc и заглушек Android API — из порта
+Mass Effect Infiltrator для PortMaster (автор EapRules). К порту Shadowgun EapRules отношения не имеет.
 
 SHADOWGUN © Madfinger Games. Проект не связан с правообладателем и не содержит файлов игры.

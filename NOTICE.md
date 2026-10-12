@@ -1,32 +1,33 @@
 # Third-party code and licensing
 
-This port is released under **GPL-3.0** (see `LICENSE`). It carries code from
+Shadowgun Bridge is released under **GPL-3.0** (see `LICENSE`). It carries code from
 several upstream projects; this file records where each part came from, because
 the licences differ and the originals must keep their attribution.
 
-The Mass Effect Infiltrator PortMaster port, its project direction and the `eapx` extraction
-tool were created by **EapRules**.
+The Shadowgun port itself - the `UnityPlayer` replacement, the dynamic JNI, the GLES bridge,
+the Android wrapper and the qemu patches - was written for this project.
+
+The loader glue, JNI layer, libc thunks and Android API stubs it started from were taken from
+the Mass Effect Infiltrator port for PortMaster by **EapRules** (GPL-3.0) and adapted. EapRules
+did not make, and is not associated with, the Shadowgun port.
 
 ## Where the code comes from
 
 | Part | Origin | Licence |
 |---|---|---|
-| `loader/` — bionic ELF loader, relocations, symbol hooking | [gmloader-next](https://github.com/JohnnyonFlame/gmloader-next) by JohnnyonFlame, itself derived from the Vita so-loader by **Andy Nguyen** | GPL (see note) |
-| `thunks/libc/` — bionic→glibc thunks | gmloader-next | GPL |
+| `loader/` - bionic ELF loader, relocations, symbol hooking | [gmloader-next](https://github.com/JohnnyonFlame/gmloader-next) by JohnnyonFlame, itself derived from the Vita so-loader by **Andy Nguyen** | GPL (see note) |
+| `thunks/libc/` - bionic to glibc thunks | gmloader-next | GPL |
 | `thunks/libc/time64.cpp`, `thunk_time64.h` | `y2038` by **Michael G Schwern** | MIT / Artistic |
-| `thunks/libc/fortify.cpp` | The Android Open Source Project (parts © Regents of the University of California) | Apache-2.0 / BSD |
+| `thunks/libc/fortify.cpp` | The Android Open Source Project (parts (c) Regents of the University of California) | Apache-2.0 / BSD |
 | `jni/jni.h` | The Android Open Source Project | Apache-2.0 |
 | `loader/leb128.h` | Free Software Foundation (binutils) | GPL |
 | `thunks/khronos/` | glad generator, Khronos headers | MIT / Apache-2.0 |
 | `third_party/powervr/PVRTDecompress.*` | [PowerVR SDK](https://github.com/powervr-graphics/Native_SDK) by Imagination Technologies | MIT |
-| `src/vfp_vector_patch.cpp` register decoding/scalar emission | adapted from VFPVector by **Bythos14** | MIT |
-| accelerometer gesture samples in `android/input_bridge.cpp` | adapted from [masseffect-vita](https://github.com/v-atamanenko/masseffect-vita) by **v-atamanenko** | MIT |
-| `tools/eapx.py` — transactional first-boot donor extractor | written by **EapRules** | GPL-3.0 |
-| `android/`, `jni/classes/xt_*`, `src/`, `harness/`, `ports/` | written for this port | GPL-3.0 |
+| base of `android/`, `jni/`, `src/symtab*`, `src/crash.cpp`, `harness/` | Mass Effect Infiltrator port for PortMaster by **EapRules**, adapted | GPL-3.0 |
+| `src/main.cpp`, `jni/dyn.*`, `src/gl_bridge.cpp`, `src/pc_prof.cpp`, `apk/`, `qemu/`, the rest of `src/` and `tools/` | written for this project | GPL-3.0 (qemu patches: GPL-2.0-or-later, as QEMU) |
 
-The ARM shared libraries under `libs.armhf/` are copied from Debian armhf
-packages by `tools/collect_libs.sh`. The release includes the exact Debian
-copyright file for every bundled SONAME under `licenses/libraries/`.
+`third_party/gmloader`, `third_party/masseffect-vita` and `third_party/vfpvector` hold only the licence
+texts of projects whose code the inherited base drew on.
 
 ## Note on the GPL version
 
@@ -45,13 +46,9 @@ repository will relicense to match — open an issue and it will be corrected.
 
 ## What is *not* in here
 
-No game code, assets, or data from Mass Effect Infiltrator are distributed by this project.
-The supported binary is EA/IronMonkey's v1.0.58 gamepad build; you supply your
-own copy. The port loads it at runtime and circumvents no protection.
+No game code, assets, or data from SHADOWGUN are distributed by this project. The supported
+build is Madfinger Games' v1.7.0 for Android (armeabi-v7a); you supply your own copy. The port
+loads it at runtime and circumvents no protection.
 
-The 4:3 screenshot under `ports/masseffect/` was captured from the user's own
-copy through this loader. The 4:3 cover is a composition
-made for this port from that same gameplay screenshot with a title overlay.
-Both are included only to identify the game in the PortMaster menu and
-are not required for the port to run. If a rights holder would rather they
-were not distributed, open an issue and they come out.
+The launcher icon of a built APK is the game's own icon, read from the builder's copy of the game
+at build time; it is not stored in this repository.
