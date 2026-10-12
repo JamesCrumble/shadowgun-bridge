@@ -1,5 +1,11 @@
 # Shadowgun Bridge
 
+**English:** run **SHADOWGUN 1.7.0** (Madfinger Games, 32-bit ARMv7, Unity 5.3) on 64-bit-only Android phones
+that have no AArch32 support. The game runs under a patched `qemu-user`, and its OpenGL ES calls are forwarded
+to the phone's real GPU. 60–90 fps on a OnePlus 13s (Snapdragon 8 Elite). No game files are included: you need
+your own copy. Ready-made APK: [Releases](https://github.com/JamesCrumble/shadowgun-bridge/releases).
+The rest of this page is in Russian.
+
 Запуск 32-битной **SHADOWGUN 1.7.0** (Madfinger Games, Unity 5.3.8, IL2CPP, только `armeabi-v7a`) на 64-битных
 Android-телефонах, в которых нет поддержки AArch32. Проверено на OnePlus 13s (Snapdragon 8 Elite, Android 15).
 
@@ -10,7 +16,7 @@ Android-телефонах, в которых нет поддержки AArch32.
 
 [Состояние](#состояние) · [Установка](#установка) · [Настройки](#настройки) · [Как это устроено](#как-это-устроено) ·
 [Производительность](#производительность) · [Структура](#структура) · [Сборка](#сборка) · [Диагностика](#диагностика) ·
-[Лицензия и авторство](#лицензия-и-авторство)
+[Другие игры](#другие-игры) · [Лицензия и авторство](#лицензия-и-авторство)
 
 ## Состояние
 
@@ -178,6 +184,13 @@ docker run --rm -u 1000:1000 -e HOME=/tmp -v "$PWD":/work shadowgun-qemu-build \
 - Вставку VFP в код можно выключить ключом `SHADOWGUN_INLINE_FP=0` в `settings.txt` (в окружение qemu
   из него попадают только ключи `SHADOWGUN_*`). `QEMU_STRICT_FP=1` (чистый softfloat) задаётся переменной
   окружения при запуске qemu вручную, например для тестов из `/data/local/tmp`.
+
+## Другие игры
+
+Тот же способ запуска — qemu-user и мост GLES на GPU телефона — для других 32-битных игр:
+
+- [NOVA3 Bridge](https://github.com/JamesCrumble/NOVA3-Bridge) — N.O.V.A. 3 1.0.7
+- [Mass Effect Infiltrator Bridge](https://github.com/JamesCrumble/mass-effect-infiltrator-bridge) — Mass Effect Infiltrator 1.0.58
 
 ## Лицензия и авторство
 
