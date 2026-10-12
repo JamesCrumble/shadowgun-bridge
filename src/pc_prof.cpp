@@ -1,6 +1,7 @@
 /* Sampling profile of the engine thread; see pc_prof.h. */
 
 #define _GNU_SOURCE 1
+#include <dirent.h>
 #include <dlfcn.h>
 #include <errno.h>
 #include <pthread.h>
@@ -8,8 +9,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/syscall.h>
 #include <time.h>
 #include <ucontext.h>
+#include <unistd.h>
 
 #include <algorithm>
 #include <map>
@@ -38,6 +41,8 @@ Sample            g_ring[kRing];
 volatile uint32_t g_head;
 pthread_t         g_target;
 bool              g_started;
+std::string       g_want;               /* SHADOWGUN_PC_PROF_THREAD: sample the busiest thread whose name contains this */
+volatile int      g_tid;                /* its tid once found; 0 = sample the engine thread through g_target */
 
 /* Runs on the engine thread: copies registers and the top of the stack, nothing else. The analysis is done by
  * the sampler thread, where it may take its time and call anything. */
@@ -211,14 +216,69 @@ void report(uint32_t first, uint32_t last)
     trace("%s", out.c_str());
 }
 
+/* The busiest thread (user+system CPU time) of this process whose name contains g_want; 0 if there is none. */
+int find_named_thread()
+{
+    DIR *d = opendir("/proc/self/task");
+    if (!d)
+        return 0;
+    int best = 0;
+    unsigned long best_ticks = 0;
+    while (struct dirent *e = readdir(d)) {
+        int tid = atoi(e->d_name);
+        if (tid <= 0)
+            continue;
+        char path[64], buf[512];
+        snprintf(path, sizeof(path), "/proc/self/task/%d/stat", tid);
+        FILE *f = fopen(path, "r");
+        if (!f)
+            continue;
+        size_t len = fread(buf, 1, sizeof(buf) - 1, f);
+        fclose(f);
+        buf[len] = 0;
+        /* "tid (comm) S ...": comm may hold spaces and parentheses, so cut at the first '(' and the last ')'. */
+        char *open = strchr(buf, '('), *close = strrchr(buf, ')');
+        if (!open || !close || close < open)
+            continue;
+        *close = 0;
+        if (!strstr(open + 1, g_want.c_str()))
+            continue;
+        unsigned long ut = 0, st = 0;
+        /* After ") ": state ppid pgrp session tty tpgid flags minflt cminflt majflt cmajflt utime stime */
+        if (sscanf(close + 2, "%*c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %lu %lu", &ut, &st) != 2)
+            continue;
+        if (!best || ut + st > best_ticks) {
+            best = tid;
+            best_ticks = ut + st;
+        }
+    }
+    closedir(d);
+    return best;
+}
+
 void *sampler(void *)
 {
     pthread_setname_np(pthread_self(), "pcprof");
     uint32_t reported = g_head;
+    long since_lookup = 0;
     for (;;) {
         struct timespec ts = { 0, kPeriodUs * 1000 };
         nanosleep(&ts, NULL);
-        pthread_kill(g_target, SIGPROF);
+        if (!g_want.empty()) {
+            /* Look again about every 5 s until a thread is chosen: workers are created late and CPU time is only
+             * telling once they have run for a while. Sampling starts only then. */
+            if (!g_tid && ++since_lookup >= 5000000L / kPeriodUs) {
+                since_lookup = 0;
+                g_tid = find_named_thread();
+                if (g_tid)
+                    trace("pcprof: sampling thread \"%s\" tid=%d instead of the engine thread", g_want.c_str(), (int)g_tid);
+            }
+            if (!g_tid)
+                continue;
+            syscall(SYS_tgkill, (int)getpid(), (int)g_tid, SIGPROF);
+        } else {
+            pthread_kill(g_target, SIGPROF);
+        }
         uint32_t head = g_head;
         if (head - reported >= (uint32_t)kReportEverySamples && head - reported < kRing - 64) {
             report(reported, head);
@@ -246,6 +306,9 @@ extern "C" void pc_prof_tick(long frame)
     sigemptyset(&sa.sa_mask);
     sigaction(SIGPROF, &sa, NULL);
     g_target = pthread_self();
+    const char *want = port_getenv("PC_PROF_THREAD");
+    if (want && *want)
+        g_want = want;
     pthread_t t;
     if (pthread_create(&t, NULL, sampler, NULL) == 0) {
         pthread_detach(t);
