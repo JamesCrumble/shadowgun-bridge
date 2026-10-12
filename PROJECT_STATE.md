@@ -174,3 +174,12 @@
   `run-as` для приложения недоступен (не debuggable), поэтому менять affinity можно только из обёртки.
 - Worker Thread в простое крутит `nanosleep(0)` ~60 раз за кадр (35% ядра) - возможный вклад в зажим ОС, не проверено.
 
+### Имя пакета и перенос сохранений (2026-10-12)
+- Пакет приложения теперь `com.jamescrumble.shadowgun` (был `com.eaprules.shadowgun`); для Android это другое приложение.
+- `SaveMigration.java`: сборка `APP_ID=com.eaprules.shadowgun tools/build_install.sh noinstall` (aapt2
+  `--rename-manifest-package`, та же отладочная подпись) обновляет старое приложение и на экране настроек выгружает
+  `home/`, `save/`, `game/saves/`, `game/files/` в `Android/data/<старый пакет>/files/migrate`. Папку переложить в
+  `Android/data/com.jamescrumble.shadowgun/files/` (права 666/777, если копировать через adb), новое приложение забирает
+  её перед запуском игры и переименовывает в `migrate.done`. Прогресс Shadowgun - `game/files/playerprefs.txt`.
+- Файлы, скопированные через `adb shell cp`, получают владельца shell и права 660: приложение их не откроет, нужен chmod.
+
