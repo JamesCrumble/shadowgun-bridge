@@ -1,10 +1,26 @@
-[1/8] Generating qemu-version.h with a custom command (wrapped by meson to capture output)
-[2/7] Compiling C object libuser.a.p/accel_tcg_tb-maint.c.o
-[3/7] Compiling C object libuser.a.p/accel_tcg_translate-all.c.o
-[4/7] Compiling C object libuser.a.p/accel_tcg_cpu-exec.c.o
-[5/7] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_op_helper.c.o
-[6/7] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_translate.c.o
-[7/7] Linking target qemu-arm
+[1/24] Generating qemu-version.h with a custom command (wrapped by meson to capture output)
+[2/23] Compiling C object libuser.a.p/accel_tcg_tb-maint.c.o
+[3/23] Compiling C object libuser.a.p/tcg_region.c.o
+[4/23] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_m_helper.c.o
+[5/23] Compiling C object libstubs_arm.a.p/target_arm_tcg_stubs32.c.o
+[6/23] Linking static target libstubs_arm.a
+[7/23] Compiling C object libcommon_arm.a.p/target_arm_tcg_arith_helper.c.o
+[8/23] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_tlb_helper.c.o
+[9/23] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_hflags.c.o
+[10/23] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_translate-m-nocp.c.o
+[11/23] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_op_helper.c.o
+[12/23] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_debug.c.o
+[13/23] Compiling C object libcommon_arm.a.p/target_arm_tcg_crypto_helper.c.o
+[14/23] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_gengvec.c.o
+[15/23] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_vfp_helper.c.o
+[16/23] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_translate-vfp.c.o
+[17/23] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_neon_helper.c.o
+[18/23] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_translate-neon.c.o
+[19/23] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_translate-mve.c.o
+[20/23] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_translate.c.o
+[21/23] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_vec_helper.c.o
+[22/23] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_mve_helper.c.o
+[23/23] Linking target qemu-arm
 /usr/lib/gcc-cross/aarch64-linux-gnu/12/../../../../aarch64-linux-gnu/bin/ld: /usr/lib/aarch64-linux-gnu/libglib-2.0.a(gutils.c.o): in function `g_get_user_database_entry':
 (.text+0x294): warning: Using 'getpwuid' in statically linked applications requires at runtime the shared libraries from the glibc version used for linking
 /usr/lib/gcc-cross/aarch64-linux-gnu/12/../../../../aarch64-linux-gnu/bin/ld: (.text+0xf0): warning: Using 'getpwnam_r' in statically linked applications requires at runtime the shared libraries from the glibc version used for linking
