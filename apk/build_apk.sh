@@ -77,7 +77,7 @@ python3 apk/ziptool.py append "$OUT/base.ap_" "$OUT/unsigned.apk" \
 
 # Kept outside $OUT so rebuilt APKs keep the same signature and update in place.
 # RELEASE=1 signs with the release key (apk/build/release.keystore, created on first use; keep a copy of it:
-# a different key means the app has to be uninstalled before an update) and names the file NOVA3-Bridge-<version>.apk.
+# a different key means the app has to be uninstalled before an update) and names the file Shadowgun-Bridge-<version>.apk.
 if [ "${RELEASE:-0}" = 1 ]; then
     KEY="$ROOT/apk/build/release.keystore"
     PASSFILE="$ROOT/apk/build/release.pass"

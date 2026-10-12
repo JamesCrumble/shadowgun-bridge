@@ -1,0 +1,31 @@
+Shadowgun Bridge - установка
+============================
+
+SHADOWGUN (Madfinger Games, v1.7.0, только 32-бит) на 64-битном телефоне через qemu-user и проброс GLES на GPU.
+Проверено на OnePlus 13s (Snapdragon 8 Elite, Android 15).
+
+Файлы игры в комплект не входят: нужен ваш собственный APK игры версии 1.7.0 и её данные.
+
+1. Установить Shadowgun-Bridge-<версия>.apk (пакет com.eaprules.shadowgun).
+
+2. Положить файлы игры (по adb или любым файловым менеджером) в папку
+
+   /sdcard/Android/data/com.eaprules.shadowgun/files/
+
+       <оригинальный APK игры 1.7.0>.apk
+       <данные игры>: cache-архив .zip (внутри main.*.obb) или сам файл main.170200014.com.madfingergames.shadowgun.obb
+
+   Имена файлов не важны, важны расширения: один .apk и один .zip либо .obb.
+
+   Пример:
+       adb push Shadowgun-Anniversary-Edition-v1-7-0.apk /sdcard/Android/data/com.eaprules.shadowgun/files/
+       adb push Shadowgun-Anniversary-Edition-v1-7-0-cache.zip /sdcard/Android/data/com.eaprules.shadowgun/files/
+
+3. Открыть приложение: сначала появятся настройки (лимит кадров, разрешение, привязка к быстрым ядрам,
+   многопоточный рендер), кнопка "Играть" запускает игру. Первый запуск дольше: распаковываются sysroot
+   (~100 МБ) и данные игры.
+
+Если игра не стартует, причина пишется на экране и в файл
+/sdcard/Android/data/com.eaprules.shadowgun/files/shadowgun.log
+
+Исходники и описание сборки: https://github.com/JamesCrumble/shadowgun-bridge
