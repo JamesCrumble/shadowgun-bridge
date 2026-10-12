@@ -1,68 +1,10 @@
-[1/65] Generating qemu-version.h with a custom command (wrapped by meson to capture output)
-[2/65] Compiling C object libstubs_arm.a.p/target_arm_gicv5-stubs.c.o
-[3/65] Compiling C object libstubs_arm.a.p/target_arm_tcg-stubs.c.o
-[4/65] Compiling C object libstubs_arm.a.p/target_arm_kvm-stub.c.o
-[5/65] Compiling C object libqemu-arm-linux-user.a.p/target_arm_cpregs-omap-stub.c.o
-[6/65] Compiling C object libqemu-arm-linux-user.a.p/target_arm_common-semi-target.c.o
-[7/65] Compiling C object libqemu-arm-linux-user.a.p/target_arm_el2-stubs.c.o
-[8/65] Compiling C object libqemu-arm-linux-user.a.p/target_arm_vfp_fpscr.c.o
-[9/65] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_cpu-v7m.c.o
-[10/65] Compiling C object libqemu-arm-linux-user.a.p/target_arm_cpregs-gcs.c.o
-[11/65] Compiling C object libstubs_arm.a.p/target_arm_tcg_stubs32.c.o
-[12/65] Compiling C object libstubs_arm.a.p/target_arm_cpu32-stubs.c.o
-[13/65] Compiling C object libqemu-arm-linux-user.a.p/target_arm_gdbstub.c.o
-[14/65] Linking static target libstubs_arm.a
-[15/65] Compiling C object libqemu-arm-linux-user.a.p/target_arm_cpu-max.c.o
-[16/65] Compiling C object libqemu-arm-linux-user.a.p/target_arm_debug_helper.c.o
-[17/65] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_tlb_helper.c.o
-[18/65] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_m_helper.c.o
-[19/65] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_debug.c.o
-[20/65] Compiling C object libqemu-arm-linux-user.a.p/target_arm_cpu.c.o
-[21/65] Compiling C object libqemu-arm-linux-user.a.p/linux-user_arm_cpu_loop.c.o
-[22/65] Compiling C object libqemu-arm-linux-user.a.p/linux-user_arm_elfload.c.o
-[23/65] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_hflags.c.o
-[24/65] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_op_helper.c.o
-[25/65] Compiling C object libqemu-arm-linux-user.a.p/linux-user_arm_signal.c.o
-[26/65] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_translate-m-nocp.c.o
-[27/65] Compiling C object libqemu-arm-linux-user.a.p/target-info-stub.c.o
-[28/65] Compiling C object libqemu-arm-linux-user.a.p/target_arm_cpregs-pmu.c.o
-[29/65] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_cpu32.c.o
-[30/65] Compiling C object libqemu-arm-linux-user.a.p/linux-user_exit.c.o
-[31/65] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_gengvec.c.o
-[32/65] Compiling C object libqemu-arm-linux-user.a.p/gdbstub_user-target.c.o
-[33/65] Compiling C object libqemu-arm-linux-user.a.p/semihosting_arm-compat-semi.c.o
-[34/65] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_vfp_helper.c.o
-[35/65] Compiling C object libqemu-arm-linux-user.a.p/linux-user_fd-trans.c.o
-[36/65] Compiling C object libqemu-arm-linux-user.a.p/semihosting_syscalls.c.o
-[37/65] Compiling C object libqemu-arm-linux-user.a.p/linux-user_linuxload.c.o
-[38/65] Compiling C object libqemu-arm-linux-user.a.p/linux-user_main.c.o
-[39/65] Compiling C object libqemu-arm-linux-user.a.p/linux-user_uname.c.o
-[40/65] Compiling C object libqemu-arm-linux-user.a.p/linux-user_thunk.c.o
-[41/65] Compiling C object libqemu-arm-linux-user.a.p/linux-user_uaccess.c.o
-[42/65] Compiling C object libqemu-arm-linux-user.a.p/linux-user_elfload.c.o
-[43/65] Compiling C object libqemu-arm-linux-user.a.p/linux-user_semihost.c.o
-[44/65] Compiling C object libqemu-arm-linux-user.a.p/linux-user_mmap.c.o
-[45/65] Compiling C object libqemu-arm-linux-user.a.p/linux-user_arm_nwfpe_extended_cpdo.c.o
-[46/65] Compiling C object libqemu-arm-linux-user.a.p/linux-user_arm_nwfpe_double_cpdo.c.o
-[47/65] Compiling C object libqemu-arm-linux-user.a.p/linux-user_signal.c.o
-[48/65] Compiling C object libqemu-arm-linux-user.a.p/linux-user_arm_nwfpe_fpa11_cpdo.c.o
-[49/65] Compiling C object libqemu-arm-linux-user.a.p/linux-user_flatload.c.o
-[50/65] Compiling C object libqemu-arm-linux-user.a.p/linux-user_arm_nwfpe_fpa11.c.o
-[51/65] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_neon_helper.c.o
-[52/65] Compiling C object libqemu-arm-linux-user.a.p/linux-user_arm_nwfpe_fpa11_cpdt.c.o
-[53/65] Compiling C object libqemu-arm-linux-user.a.p/linux-user_arm_nwfpe_fpopcode.c.o
-[54/65] Compiling C object libqemu-arm-linux-user.a.p/linux-user_arm_nwfpe_fpa11_cprt.c.o
-[55/65] Compiling C object libqemu-arm-linux-user.a.p/linux-user_arm_nwfpe_single_cpdo.c.o
-[56/65] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_translate-vfp.c.o
-[57/65] Compiling C object libqemu-arm-linux-user.a.p/target_arm_helper.c.o
-[58/65] Compiling C object libqemu-arm-linux-user.a.p/linux-user_strace.c.o
-[59/65] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_translate-neon.c.o
-[60/65] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_translate-mve.c.o
-[61/65] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_translate.c.o
-[62/65] Compiling C object libqemu-arm-linux-user.a.p/linux-user_syscall.c.o
-[63/65] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_vec_helper.c.o
-[64/65] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_mve_helper.c.o
-[65/65] Linking target qemu-arm
+[1/8] Generating qemu-version.h with a custom command (wrapped by meson to capture output)
+[2/7] Compiling C object libuser.a.p/accel_tcg_tb-maint.c.o
+[3/7] Compiling C object libuser.a.p/accel_tcg_translate-all.c.o
+[4/7] Compiling C object libuser.a.p/accel_tcg_cpu-exec.c.o
+[5/7] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_op_helper.c.o
+[6/7] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_translate.c.o
+[7/7] Linking target qemu-arm
 /usr/lib/gcc-cross/aarch64-linux-gnu/12/../../../../aarch64-linux-gnu/bin/ld: /usr/lib/aarch64-linux-gnu/libglib-2.0.a(gutils.c.o): in function `g_get_user_database_entry':
 (.text+0x294): warning: Using 'getpwuid' in statically linked applications requires at runtime the shared libraries from the glibc version used for linking
 /usr/lib/gcc-cross/aarch64-linux-gnu/12/../../../../aarch64-linux-gnu/bin/ld: (.text+0xf0): warning: Using 'getpwnam_r' in statically linked applications requires at runtime the shared libraries from the glibc version used for linking

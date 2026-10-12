@@ -34,7 +34,7 @@
      gen_helper_cpsr_write(tcg_env, var, tcg_constant_i32(mask));
  }
  
-@@ -1307,11 +1327,82 @@
+@@ -1307,11 +1327,83 @@
      }
  }
  
@@ -72,7 +72,8 @@
 +    tcg_gen_shri_i32(t32, pc, TB_JMP_CACHE_BITS);
 +    tcg_gen_xor_i32(t32, t32, pc);
 +    tcg_gen_andi_i32(t32, t32, TB_JMP_CACHE_SIZE - 1);
-+    tcg_gen_shli_i32(t32, t32, 4);                       /* entries are 16 bytes: { tb, pc } */
++    QEMU_BUILD_BUG_ON(sizeof(((CPUJumpCache *)0)->array[0]) != 32);
++    tcg_gen_shli_i32(t32, t32, 5);                       /* entries are 32 bytes: { tb, pc, key, ptr } */
 +    tcg_gen_ext_i32_ptr(off, t32);
 +    tcg_gen_ld_ptr(jc, tcg_env, offsetof(CPUState, tb_jmp_cache) - offsetof(ArchCPU, env));
 +    tcg_gen_add_ptr(ent, jc, off);
@@ -118,7 +119,7 @@
          TCGv_ptr ptr = tcg_temp_new_ptr();
          gen_helper_arm_lookup_tb_ptr(ptr, tcg_env);
          tcg_gen_goto_ptr_val(ptr);
-@@ -1346,7 +1437,7 @@
+@@ -1346,7 +1438,7 @@
          tcg_gen_exit_tb(s->base.tb, tb_slot_idx);
      } else {
          gen_update_pc(s, diff);
@@ -127,7 +128,7 @@
      }
      s->base.is_jmp = DISAS_NORETURN;
  }
-@@ -1383,7 +1474,7 @@
+@@ -1383,7 +1475,7 @@
           * and don't chain to another TB.
           */
          gen_update_pc(s, diff);
@@ -136,7 +137,7 @@
          s->base.is_jmp = DISAS_NORETURN;
          break;
      default:
-@@ -6445,6 +6536,14 @@
+@@ -6445,6 +6537,14 @@
          dc->ns = EX_TBFLAG_A32(tb_flags, NS);
          dc->vfp_enabled = EX_TBFLAG_A32(tb_flags, VFPEN);
          dc->vec_len = EX_TBFLAG_A32(tb_flags, VECLEN);
@@ -151,7 +152,7 @@
          dc->vec_stride = EX_TBFLAG_A32(tb_flags, VECSTRIDE);
          dc->sme_trap_nonstreaming =
              EX_TBFLAG_A32(tb_flags, SME_TRAP_NONSTREAMING);
-@@ -6895,7 +6994,7 @@
+@@ -6895,7 +6995,7 @@
              gen_update_pc(dc, curr_insn_len(dc));
              /* fall through */
          case DISAS_JUMP:
@@ -825,7 +826,27 @@
              }
 --- a/target/arm/tcg/op_helper.c
 +++ b/target/arm/tcg/op_helper.c
-@@ -820,6 +820,7 @@
+@@ -807,31 +807,31 @@
+     CPUState *cs = env_cpu(env);
+     CPUARMTBFlags flags = env->hflags;
+ 
++    /*
++     * Shadowgun: M-profile, gdb single-step and breakpoints are not tested here - this build runs one
++     * A-profile linux-user CPU with no gdbstub - and a hit is decided from the jump-cache entry alone
++     * (pc, key, ptr), without reading the TB. The TB's cflags are not compared: the CPU's cflags change
++     * only together with a tb_flush, and an invalidated TB is taken out of every jump cache.
++     */
+     if (likely(!EX_TBFLAG_ANY(flags, AARCH64_STATE) &&
+-               !EX_TBFLAG_ANY(flags, SS_ACTIVE) &&
+-               !arm_feature(env, ARM_FEATURE_M) &&
+-               !cpu_single_stepping(cs) &&
+-               QTAILQ_EMPTY(&cs->breakpoints))) {
++               !EX_TBFLAG_ANY(flags, SS_ACTIVE))) {
+         vaddr pc = env->regs[15];
+-        uint32_t cflags = cs->tcg_cflags;
+         CPUJumpCache *jc = cs->tb_jmp_cache;
+         unsigned h = (pc ^ (pc >> TB_JMP_CACHE_BITS)) & (TB_JMP_CACHE_SIZE - 1);
+-        TranslationBlock *tb;
  
          DP_TBFLAG_A32(flags, VECLEN, env->vfp.vec_len);
          DP_TBFLAG_A32(flags, VECSTRIDE, env->vfp.vec_stride);
@@ -833,6 +854,21 @@
          if (env->vfp.xregs[ARM_VFP_FPEXC] & (1 << 30)) {
              DP_TBFLAG_A32(flags, VFPEN, 1);
          }
+         DP_TBFLAG_AM32(flags, THUMB, env->thumb);
+         DP_TBFLAG_AM32(flags, CONDEXEC, env->condexec_bits);
+ 
+-        tb = qatomic_read(&jc->array[h].tb);
+-        if (likely(tb && jc->array[h].pc == pc &&
+-                   tb->cs_base == flags.flags2 && tb->flags == flags.flags &&
+-                   tb_cflags(tb) == cflags)) {
++        if (likely(qatomic_read(&jc->array[h].tb) && jc->array[h].pc == pc &&
++                   jc->array[h].key == (flags.flags | (flags.flags2 << 32)))) {
+             cs->neg.can_do_io = true;
+-            return tb->tc.ptr;
++            return jc->array[h].ptr;
+         }
+     }
+ #endif
 --- a/target/arm/tcg/translate.h
 +++ b/target/arm/tcg/translate.h
 @@ -93,6 +93,7 @@
@@ -994,3 +1030,39 @@
      }                                                                       \
      for (i = 0; i < oprsz / 4; i += segment) {                              \
          float32 mm = m[H4(i + idx)];                                        \
+--- a/accel/tcg/tb-jmp-cache.h
++++ b/accel/tcg/tb-jmp-cache.h
+@@ -32,6 +32,13 @@
+     struct {
+         TranslationBlock *tb;
+         vaddr pc;
++        /*
++         * Shadowgun: what a hit needs from the TB, copied here by the CPU that owns the cache when it
++         * fills the entry, so the indirect-branch fast path does not have to touch the TB itself (a second
++         * dependent load that usually misses L1). key is tb->flags | tb->cs_base << 32.
++         */
++        uint64_t key;
++        const void *ptr;
+     } array[TB_JMP_CACHE_SIZE];
+ } CPUJumpCache;
+ 
+--- a/accel/tcg/cpu-exec.c
++++ b/accel/tcg/cpu-exec.c
+@@ -254,6 +254,8 @@
+     }
+ 
+     jc->array[hash].pc = s.pc;
++    jc->array[hash].key = tb->flags | (tb->cs_base << 32);
++    jc->array[hash].ptr = tb->tc.ptr;
+     qatomic_set(&jc->array[hash].tb, tb);
+ 
+ hit:
+@@ -982,6 +984,8 @@
+                 h = tb_jmp_cache_hash_func(s.pc);
+                 jc = cpu->tb_jmp_cache;
+                 jc->array[h].pc = s.pc;
++                jc->array[h].key = tb->flags | (tb->cs_base << 32);
++                jc->array[h].ptr = tb->tc.ptr;
+                 qatomic_set(&jc->array[h].tb, tb);
+             }
+ 

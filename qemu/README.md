@@ -60,5 +60,10 @@ Diff of qemu-src vs nova3probe's qemu-src (11.1.2). Test scene: 33.6 fps -> ~42 
   vmax/vmin on the host when both operands are plain in every lane. armbench neon 48 -> 28 ms. Test: `neoncmptest.c`
   (compares and min/max, hash equal to QEMU_STRICT_FP=1 and to the previous build).
 - cpu.h: arm_a32_fastfp() reads the FPCR control bits (one load) - the bitfield version cost ~8% on armbench calls.
+- Indirect-branch lookup (tb-jmp-cache.h, cpu-exec.c, op_helper.c): jump-cache entries carry the TB's flags key and code
+  pointer (32 bytes each, 2 MB per thread at 16 bits), so a hit in helper_arm_lookup_tb_ptr never reads the TB; the
+  M-profile, gdb single-step and breakpoint tests are gone from that path, and the TB's cflags are no longer compared
+  (see the comment there for why that holds in this build). armbench: calls unchanged, ints 71 -> 66 ms. Not yet
+  measured in game with the screen on.
 - meson.build: hardening flags (-ftrivial-auto-var-init, -fzero-call-used-regs) removed.
 Tests: cmptest.c hash d6137e57, fptest hash 94e3b209 (fast == strict == Debian qemu 7.2).
