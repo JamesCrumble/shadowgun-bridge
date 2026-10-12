@@ -1,0 +1,39 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.eaprules.shadowgun"
+    android:versionCode="1"
+    android:versionName="0.1-test">
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="android.hardware.gamepad" android:required="false" />
+    <application
+        android:theme="@style/AppTheme"
+        android:icon="@drawable/icon"
+        android:label="Shadowgun"
+        android:debuggable="false"
+        android:appCategory="game"
+        android:isGame="true"
+        android:extractNativeLibs="true"
+        android:resizeableActivity="false">
+        <!-- Not debuggable (CheckJNI would slow every GL call of the bridge), but open to simpleperf from adb. -->
+        <profileable android:shell="true" />
+        <meta-data android:name="android.game_mode_config" android:resource="@xml/game_mode_config" />
+        <activity
+            android:name=".SettingsActivity"
+            android:label="Shadowgun"
+            android:screenOrientation="sensorLandscape"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".MainActivity"
+            android:label="Shadowgun"
+            android:screenOrientation="sensorLandscape"
+            android:launchMode="singleTask"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|density|uiMode|touchscreen|fontScale|layoutDirection|locale|colorMode"
+            android:exported="true">
+        </activity>
+    </application>
+</manifest>

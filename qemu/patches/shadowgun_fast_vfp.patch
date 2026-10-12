@@ -1,0 +1,593 @@
+--- a/target/arm/tcg/translate.c
++++ b/target/arm/tcg/translate.c
+@@ -30,6 +30,8 @@
+ #include "cpregs.h"
+ #include "exec/target_page.h"
+ #include "exec/translator.h"
++#include "exec/translation-block.h"
++#include "accel/tcg/tb-jmp-cache.h"
+ #include "helper.h"
+ #include "helper-mve.h"
+ 
+@@ -353,6 +355,24 @@
+ 
+ void gen_set_cpsr(TCGv_i32 var, uint32_t mask)
+ {
++    /*
++     * SHADOWGUN build: the condition flags (VMRS APSR_nzcv, FPSCR after every VCMP; MSR APSR_nzcv[q]) are
++     * four TCG globals, so write them inline instead of calling cpsr_write() - it was ~11% of the engine
++     * thread in a simpleperf profile. Same assignments as cpsr_write(): ZF is zero when Z is set.
++     */
++    if (mask == CPSR_NZCV || mask == (CPSR_NZCV | CPSR_Q)) {
++        tcg_gen_mov_i32(cpu_NF, var);
++        tcg_gen_extract_i32(cpu_CF, var, 29, 1);
++        tcg_gen_shli_i32(cpu_VF, var, 3);
++        tcg_gen_extract_i32(cpu_ZF, var, 30, 1);
++        tcg_gen_xori_i32(cpu_ZF, cpu_ZF, 1);
++        if (mask & CPSR_Q) {
++            TCGv_i32 q = tcg_temp_new_i32();
++            tcg_gen_extract_i32(q, var, 27, 1);
++            tcg_gen_st_i32(q, tcg_env, offsetof(CPUARMState, QF));
++        }
++        return;
++    }
+     gen_helper_cpsr_write(tcg_env, var, tcg_constant_i32(mask));
+ }
+ 
+@@ -1307,11 +1327,82 @@
+     }
+ }
+ 
+-static void gen_goto_ptr(void)
++#if defined(NOVA3_FAST_LOOKUP) && defined(CONFIG_USER_ONLY)
++/*
++ * SHADOWGUN build: the jump-cache probe of helper_arm_lookup_tb_ptr, emitted inline for an indirect jump
++ * (bx lr, ldr pc, pop {pc}, blx reg) taken from A32 ARM state. Simpleperf put that helper at ~25% of the
++ * engine thread: a call, ~30 instructions to rebuild the TB flags from env, the register zeroing on return.
++ *
++ * The flags of a TB can only differ from the current TB's if something changed them inside it, and every
++ * instruction that does (VMSR of FPSCR/FPEXC, CPSR mode writes) ends the TB without this path - except the
++ * Thumb bit, which a BX changes and is therefore tested dynamically. So the probe compares the cached TB
++ * against the current TB's own cs_base/flags/cflags, as constants. Any miss falls through to the helper,
++ * which stays the reference. Only plain TBs (no icount, single-step, last-io, pc-relative...) use it.
++ */
++static void gen_goto_ptr_inline(DisasContext *s)
++{
++    TranslationBlock *tb = s->base.tb;
++    TCGLabel *slow = gen_new_label();
++    TCGv_i32 pc = tcg_temp_new_i32();
++    TCGv_i32 t32 = tcg_temp_new_i32();
++    TCGv_i64 t64 = tcg_temp_new_i64();
++    TCGv_i64 pc64 = tcg_temp_new_i64();
++    TCGv_ptr jc = tcg_temp_new_ptr();
++    TCGv_ptr ent = tcg_temp_new_ptr();
++    TCGv_ptr off = tcg_temp_new_ptr();
++    TCGv_ptr tbp = tcg_temp_new_ptr();
++
++    tcg_gen_ld_i32(t32, tcg_env, offsetof(CPUARMState, thumb));
++    tcg_gen_brcondi_i32(TCG_COND_NE, t32, 0, slow);
++
++    tcg_gen_mov_i32(pc, cpu_R[15]);
++    tcg_gen_extu_i32_i64(pc64, pc);
++    tcg_gen_shri_i32(t32, pc, TB_JMP_CACHE_BITS);
++    tcg_gen_xor_i32(t32, t32, pc);
++    tcg_gen_andi_i32(t32, t32, TB_JMP_CACHE_SIZE - 1);
++    tcg_gen_shli_i32(t32, t32, 4);                       /* entries are 16 bytes: { tb, pc } */
++    tcg_gen_ext_i32_ptr(off, t32);
++    tcg_gen_ld_ptr(jc, tcg_env, offsetof(CPUState, tb_jmp_cache) - offsetof(ArchCPU, env));
++    tcg_gen_add_ptr(ent, jc, off);
++
++    tcg_gen_ld_ptr(tbp, ent, offsetof(CPUJumpCache, array[0].tb));
++    tcg_gen_brcondi_ptr(TCG_COND_EQ, tbp, 0, slow);
++    tcg_gen_ld_i64(t64, ent, offsetof(CPUJumpCache, array[0].pc));
++    tcg_gen_brcond_i64(TCG_COND_NE, t64, pc64, slow);
++    tcg_gen_ld_i64(t64, tbp, offsetof(TranslationBlock, cs_base));
++    tcg_gen_brcondi_i64(TCG_COND_NE, t64, tb->cs_base, slow);
++    tcg_gen_ld_i32(t32, tbp, offsetof(TranslationBlock, flags));
++    tcg_gen_brcondi_i32(TCG_COND_NE, t32, tb->flags, slow);
++    tcg_gen_ld_i32(t32, tbp, offsetof(TranslationBlock, cflags));
++    tcg_gen_brcondi_i32(TCG_COND_NE, t32, tb_cflags(tb), slow);
++
++    tcg_gen_ld_ptr(tbp, tbp, offsetof(TranslationBlock, tc.ptr));
++    tcg_gen_movi_i32(t32, 1);
++    tcg_gen_st8_i32(t32, tcg_env, offsetof(CPUState, neg.can_do_io) - offsetof(ArchCPU, env));
++    tcg_gen_goto_ptr_val(tbp);
++
++    gen_set_label(slow);
++}
++#endif
++
++static bool inline_lookup_on;
++
++static void __attribute__((constructor)) inline_lookup_init(void)
++{
++    const char *v = getenv("SHADOWGUN_INLINE_LOOKUP");
++    inline_lookup_on = v && *v && *v != '0';
++}
++
++static void gen_goto_ptr(DisasContext *s, bool indirect)
+ {
+ #if defined(NOVA3_FAST_LOOKUP) && defined(CONFIG_USER_ONLY)
+     /* NOVA3 Android build: A32 lookup with the flags built inline (op_helper.c). */
+     if (!(tcg_ctx->gen_tb->cflags & CF_NO_GOTO_PTR)) {
++        if (inline_lookup_on && indirect && !s->thumb && !s->condexec_mask && !s->ss_active &&
++            !(tb_cflags(s->base.tb) & ~(CF_PARALLEL | CF_CLUSTER_MASK)) &&
++            !arm_dc_feature(s, ARM_FEATURE_M)) {
++            gen_goto_ptr_inline(s);
++        }
+         TCGv_ptr ptr = tcg_temp_new_ptr();
+         gen_helper_arm_lookup_tb_ptr(ptr, tcg_env);
+         tcg_gen_goto_ptr_val(ptr);
+@@ -1346,7 +1437,7 @@
+         tcg_gen_exit_tb(s->base.tb, tb_slot_idx);
+     } else {
+         gen_update_pc(s, diff);
+-        gen_goto_ptr();
++        gen_goto_ptr(s, false);
+     }
+     s->base.is_jmp = DISAS_NORETURN;
+ }
+@@ -1383,7 +1474,7 @@
+          * and don't chain to another TB.
+          */
+         gen_update_pc(s, diff);
+-        gen_goto_ptr();
++        gen_goto_ptr(s, false);
+         s->base.is_jmp = DISAS_NORETURN;
+         break;
+     default:
+@@ -6895,7 +6986,7 @@
+             gen_update_pc(dc, curr_insn_len(dc));
+             /* fall through */
+         case DISAS_JUMP:
+-            gen_goto_ptr();
++            gen_goto_ptr(dc, dc->base.is_jmp == DISAS_JUMP);
+             break;
+         case DISAS_UPDATE_EXIT:
+             gen_update_pc(dc, curr_insn_len(dc));
+--- a/target/arm/tcg/translate-vfp.c
++++ b/target/arm/tcg/translate-vfp.c
+@@ -2496,6 +2496,50 @@
+     return true;
+ }
+ 
++/*
++ * SHADOWGUN build: VCMP/VCMPE.F32 as plain TCG ops. The relation is read off the bit patterns (sign-magnitude to
++ * two's complement: -0 == +0, denormals compare exactly, as without flush-to-zero) and written to FPSCR[31:28]
++ * with no helper call - a call cost more than the compare itself. The cumulative flags (IOC for a NaN) are not
++ * produced, like the other fast VFP paths; QEMU_STRICT_FP=1 keeps the softfloat helpers. Guests that set
++ * FPSCR.FZ would differ on denormal inputs (this game does not).
++ */
++static bool vcmp_inline_ok = true;
++
++static void __attribute__((constructor)) vcmp_inline_init(void)
++{
++    const char *v = getenv("QEMU_STRICT_FP");
++    vcmp_inline_ok = !(v && *v && *v != '0');
++}
++
++static void gen_vcmp_s_inline(TCGv_i32 a, TCGv_i32 b)
++{
++    TCGv_i32 aa = tcg_temp_new_i32(), ab = tcg_temp_new_i32();
++    TCGv_i32 ka = tcg_temp_new_i32(), kb = tcg_temp_new_i32();
++    TCGv_i32 t = tcg_temp_new_i32(), f = tcg_temp_new_i32(), u = tcg_temp_new_i32();
++    TCGv_i32 zero = tcg_constant_i32(0);
++
++    tcg_gen_andi_i32(aa, a, 0x7fffffff);
++    tcg_gen_andi_i32(ab, b, 0x7fffffff);
++    tcg_gen_neg_i32(t, aa);
++    tcg_gen_movcond_i32(TCG_COND_LT, ka, a, zero, t, aa);
++    tcg_gen_neg_i32(t, ab);
++    tcg_gen_movcond_i32(TCG_COND_LT, kb, b, zero, t, ab);
++
++    tcg_gen_movi_i32(f, 0x2);                                       /* greater */
++    tcg_gen_movcond_i32(TCG_COND_LT, f, ka, kb, tcg_constant_i32(0x8), f);
++    tcg_gen_movcond_i32(TCG_COND_EQ, f, ka, kb, tcg_constant_i32(0x6), f);
++    tcg_gen_setcondi_i32(TCG_COND_GTU, u, aa, 0x7f800000);          /* either a NaN: unordered */
++    tcg_gen_setcondi_i32(TCG_COND_GTU, t, ab, 0x7f800000);
++    tcg_gen_or_i32(u, u, t);
++    tcg_gen_movcond_i32(TCG_COND_NE, f, u, zero, tcg_constant_i32(0x3), f);
++
++    tcg_gen_shli_i32(f, f, 28);
++    tcg_gen_ld_i32(t, tcg_env, offsetoflow32(CPUARMState, vfp.fpsr));
++    tcg_gen_andi_i32(t, t, 0x0fffffff);
++    tcg_gen_or_i32(t, t, f);
++    tcg_gen_st_i32(t, tcg_env, offsetoflow32(CPUARMState, vfp.fpsr));
++}
++
+ static bool trans_VCMP_sp(DisasContext *s, arg_VCMP_sp *a)
+ {
+     TCGv_i32 vd, vm;
+@@ -2523,7 +2567,9 @@
+         vfp_load_reg32(vm, a->vm);
+     }
+ 
+-    if (a->e) {
++    if (vcmp_inline_ok) {
++        gen_vcmp_s_inline(vd, vm);
++    } else if (a->e) {
+         gen_helper_vfp_cmpes(vd, vm, tcg_env);
+     } else {
+         gen_helper_vfp_cmps(vd, vm, tcg_env);
+--- a/target/arm/tcg/vfp_helper.c
++++ b/target/arm/tcg/vfp_helper.c
+@@ -309,6 +309,14 @@
+     return float64_sqrt(a, fpst);
+ }
+ 
++static bool vfp_strict_fp;
++
++static void __attribute__((constructor)) vfp_strict_fp_init(void)
++{
++    const char *v = getenv("QEMU_STRICT_FP");
++    vfp_strict_fp = v && *v && *v != '0';
++}
++
+ static void softfloat_to_vfp_compare(CPUARMState *env, FloatRelation cmp)
+ {
+     uint32_t flags;
+@@ -344,10 +352,44 @@
+         FLOATTYPE ## _compare(a, b, &env->vfp.fp_status[FPST])); \
+ }
+ DO_VFP_cmp(h, float16, dh_ctype_f16, FPST_A32_F16)
+-DO_VFP_cmp(s, float32, float32, FPST_A32)
+ DO_VFP_cmp(d, float64, float64, FPST_A32)
+ #undef DO_VFP_cmp
+ 
++/*
++ * SHADOWGUN build: VCMP/VCMPE.F32 without softfloat. The relation is read straight off the bit patterns
++ * (sign-magnitude to two's complement, so -0 == +0 and denormals compare exactly, as without flush-to-zero),
++ * independent of the host FPCR. Like the other fast VFP paths the cumulative flags (IOC for a NaN) are not
++ * produced; flush-inputs-to-zero guests and QEMU_STRICT_FP=1 keep the softfloat path.
++ */
++static inline void vfp_cmp_s_fast(float32 a, float32 b, CPUARMState *env, bool exc)
++{
++    float_status *st = &env->vfp.fp_status[FPST_A32];
++    uint32_t flags;
++
++    if (unlikely(st->flush_inputs_to_zero) || unlikely(vfp_strict_fp)) {
++        softfloat_to_vfp_compare(env, exc ? float32_compare(a, b, st) : float32_compare_quiet(a, b, st));
++        return;
++    }
++    if (unlikely((a & 0x7fffffffu) > 0x7f800000u || (b & 0x7fffffffu) > 0x7f800000u)) {
++        flags = 0x3;                                        /* unordered */
++    } else {
++        int32_t ka = (a & 0x80000000u) ? -(int32_t)(a & 0x7fffffffu) : (int32_t)a;
++        int32_t kb = (b & 0x80000000u) ? -(int32_t)(b & 0x7fffffffu) : (int32_t)b;
++        flags = ka == kb ? 0x6 : ka < kb ? 0x8 : 0x2;
++    }
++    env->vfp.fpsr = deposit64(env->vfp.fpsr, 28, 4, flags); /* NZCV */
++}
++
++void VFP_HELPER(cmp, s)(float32 a, float32 b, CPUARMState *env)
++{
++    vfp_cmp_s_fast(a, b, env, false);
++}
++
++void VFP_HELPER(cmpe, s)(float32 a, float32 b, CPUARMState *env)
++{
++    vfp_cmp_s_fast(a, b, env, true);
++}
++
+ /* Integer to float and float to integer conversions */
+ 
+ #define CONV_ITOF(name, ftype, fsz, sign)                           \
+--- a/target/arm/tcg/helper-defs.h
++++ b/target/arm/tcg/helper-defs.h
+@@ -114,128 +114,128 @@
+ DEF_HELPER_1(vfp_get_fpscr, i32, env)
+ DEF_HELPER_2(vfp_set_fpscr, void, env, i32)
+ 
+-DEF_HELPER_3(vfp_addh, f16, f16, f16, fpst)
+-DEF_HELPER_3(vfp_adds, f32, f32, f32, fpst)
+-DEF_HELPER_3(vfp_addd, f64, f64, f64, fpst)
+-DEF_HELPER_3(vfp_subh, f16, f16, f16, fpst)
+-DEF_HELPER_3(vfp_subs, f32, f32, f32, fpst)
+-DEF_HELPER_3(vfp_subd, f64, f64, f64, fpst)
+-DEF_HELPER_3(vfp_mulh, f16, f16, f16, fpst)
+-DEF_HELPER_3(vfp_muls, f32, f32, f32, fpst)
+-DEF_HELPER_3(vfp_muld, f64, f64, f64, fpst)
+-DEF_HELPER_3(vfp_divh, f16, f16, f16, fpst)
+-DEF_HELPER_3(vfp_divs, f32, f32, f32, fpst)
+-DEF_HELPER_3(vfp_divd, f64, f64, f64, fpst)
+-DEF_HELPER_3(vfp_maxh, f16, f16, f16, fpst)
+-DEF_HELPER_3(vfp_maxs, f32, f32, f32, fpst)
+-DEF_HELPER_3(vfp_maxd, f64, f64, f64, fpst)
+-DEF_HELPER_3(vfp_minh, f16, f16, f16, fpst)
+-DEF_HELPER_3(vfp_mins, f32, f32, f32, fpst)
+-DEF_HELPER_3(vfp_mind, f64, f64, f64, fpst)
+-DEF_HELPER_3(vfp_maxnumh, f16, f16, f16, fpst)
+-DEF_HELPER_3(vfp_maxnums, f32, f32, f32, fpst)
+-DEF_HELPER_3(vfp_maxnumd, f64, f64, f64, fpst)
+-DEF_HELPER_3(vfp_minnumh, f16, f16, f16, fpst)
+-DEF_HELPER_3(vfp_minnums, f32, f32, f32, fpst)
+-DEF_HELPER_3(vfp_minnumd, f64, f64, f64, fpst)
+-DEF_HELPER_2(vfp_sqrth, f16, f16, fpst)
+-DEF_HELPER_2(vfp_sqrts, f32, f32, fpst)
+-DEF_HELPER_2(vfp_sqrtd, f64, f64, fpst)
+-DEF_HELPER_3(vfp_cmph, void, f16, f16, env)
+-DEF_HELPER_3(vfp_cmps, void, f32, f32, env)
+-DEF_HELPER_3(vfp_cmpd, void, f64, f64, env)
+-DEF_HELPER_3(vfp_cmpeh, void, f16, f16, env)
+-DEF_HELPER_3(vfp_cmpes, void, f32, f32, env)
+-DEF_HELPER_3(vfp_cmped, void, f64, f64, env)
++DEF_HELPER_FLAGS_3(vfp_addh, TCG_CALL_NO_RWG, f16, f16, f16, fpst)
++DEF_HELPER_FLAGS_3(vfp_adds, TCG_CALL_NO_RWG, f32, f32, f32, fpst)
++DEF_HELPER_FLAGS_3(vfp_addd, TCG_CALL_NO_RWG, f64, f64, f64, fpst)
++DEF_HELPER_FLAGS_3(vfp_subh, TCG_CALL_NO_RWG, f16, f16, f16, fpst)
++DEF_HELPER_FLAGS_3(vfp_subs, TCG_CALL_NO_RWG, f32, f32, f32, fpst)
++DEF_HELPER_FLAGS_3(vfp_subd, TCG_CALL_NO_RWG, f64, f64, f64, fpst)
++DEF_HELPER_FLAGS_3(vfp_mulh, TCG_CALL_NO_RWG, f16, f16, f16, fpst)
++DEF_HELPER_FLAGS_3(vfp_muls, TCG_CALL_NO_RWG, f32, f32, f32, fpst)
++DEF_HELPER_FLAGS_3(vfp_muld, TCG_CALL_NO_RWG, f64, f64, f64, fpst)
++DEF_HELPER_FLAGS_3(vfp_divh, TCG_CALL_NO_RWG, f16, f16, f16, fpst)
++DEF_HELPER_FLAGS_3(vfp_divs, TCG_CALL_NO_RWG, f32, f32, f32, fpst)
++DEF_HELPER_FLAGS_3(vfp_divd, TCG_CALL_NO_RWG, f64, f64, f64, fpst)
++DEF_HELPER_FLAGS_3(vfp_maxh, TCG_CALL_NO_RWG, f16, f16, f16, fpst)
++DEF_HELPER_FLAGS_3(vfp_maxs, TCG_CALL_NO_RWG, f32, f32, f32, fpst)
++DEF_HELPER_FLAGS_3(vfp_maxd, TCG_CALL_NO_RWG, f64, f64, f64, fpst)
++DEF_HELPER_FLAGS_3(vfp_minh, TCG_CALL_NO_RWG, f16, f16, f16, fpst)
++DEF_HELPER_FLAGS_3(vfp_mins, TCG_CALL_NO_RWG, f32, f32, f32, fpst)
++DEF_HELPER_FLAGS_3(vfp_mind, TCG_CALL_NO_RWG, f64, f64, f64, fpst)
++DEF_HELPER_FLAGS_3(vfp_maxnumh, TCG_CALL_NO_RWG, f16, f16, f16, fpst)
++DEF_HELPER_FLAGS_3(vfp_maxnums, TCG_CALL_NO_RWG, f32, f32, f32, fpst)
++DEF_HELPER_FLAGS_3(vfp_maxnumd, TCG_CALL_NO_RWG, f64, f64, f64, fpst)
++DEF_HELPER_FLAGS_3(vfp_minnumh, TCG_CALL_NO_RWG, f16, f16, f16, fpst)
++DEF_HELPER_FLAGS_3(vfp_minnums, TCG_CALL_NO_RWG, f32, f32, f32, fpst)
++DEF_HELPER_FLAGS_3(vfp_minnumd, TCG_CALL_NO_RWG, f64, f64, f64, fpst)
++DEF_HELPER_FLAGS_2(vfp_sqrth, TCG_CALL_NO_RWG, f16, f16, fpst)
++DEF_HELPER_FLAGS_2(vfp_sqrts, TCG_CALL_NO_RWG, f32, f32, fpst)
++DEF_HELPER_FLAGS_2(vfp_sqrtd, TCG_CALL_NO_RWG, f64, f64, fpst)
++DEF_HELPER_FLAGS_3(vfp_cmph, TCG_CALL_NO_RWG, void, f16, f16, env)
++DEF_HELPER_FLAGS_3(vfp_cmps, TCG_CALL_NO_RWG, void, f32, f32, env)
++DEF_HELPER_FLAGS_3(vfp_cmpd, TCG_CALL_NO_RWG, void, f64, f64, env)
++DEF_HELPER_FLAGS_3(vfp_cmpeh, TCG_CALL_NO_RWG, void, f16, f16, env)
++DEF_HELPER_FLAGS_3(vfp_cmpes, TCG_CALL_NO_RWG, void, f32, f32, env)
++DEF_HELPER_FLAGS_3(vfp_cmped, TCG_CALL_NO_RWG, void, f64, f64, env)
+ 
+-DEF_HELPER_2(vfp_fcvtds, f64, f32, fpst)
+-DEF_HELPER_2(vfp_fcvtsd, f32, f64, fpst)
++DEF_HELPER_FLAGS_2(vfp_fcvtds, TCG_CALL_NO_RWG, f64, f32, fpst)
++DEF_HELPER_FLAGS_2(vfp_fcvtsd, TCG_CALL_NO_RWG, f32, f64, fpst)
+ DEF_HELPER_FLAGS_2(bfcvt, TCG_CALL_NO_RWG, i32, f32, fpst)
+ DEF_HELPER_FLAGS_2(bfcvt_pair, TCG_CALL_NO_RWG, i32, i64, fpst)
+ 
+-DEF_HELPER_2(vfp_uitoh, f16, i32, fpst)
+-DEF_HELPER_2(vfp_uitos, f32, i32, fpst)
+-DEF_HELPER_2(vfp_uitod, f64, i32, fpst)
+-DEF_HELPER_2(vfp_sitoh, f16, i32, fpst)
+-DEF_HELPER_2(vfp_sitos, f32, i32, fpst)
+-DEF_HELPER_2(vfp_sitod, f64, i32, fpst)
+-
+-DEF_HELPER_2(vfp_touih, i32, f16, fpst)
+-DEF_HELPER_2(vfp_touis, i32, f32, fpst)
+-DEF_HELPER_2(vfp_touid, i32, f64, fpst)
+-DEF_HELPER_2(vfp_touizh, i32, f16, fpst)
+-DEF_HELPER_2(vfp_touizs, i32, f32, fpst)
+-DEF_HELPER_2(vfp_touizd, i32, f64, fpst)
+-DEF_HELPER_2(vfp_tosih, s32, f16, fpst)
+-DEF_HELPER_2(vfp_tosis, s32, f32, fpst)
+-DEF_HELPER_2(vfp_tosid, s32, f64, fpst)
+-DEF_HELPER_2(vfp_tosizh, s32, f16, fpst)
+-DEF_HELPER_2(vfp_tosizs, s32, f32, fpst)
+-DEF_HELPER_2(vfp_tosizd, s32, f64, fpst)
+-
+-DEF_HELPER_3(vfp_toshh_round_to_zero, i32, f16, i32, fpst)
+-DEF_HELPER_3(vfp_toslh_round_to_zero, i32, f16, i32, fpst)
+-DEF_HELPER_3(vfp_touhh_round_to_zero, i32, f16, i32, fpst)
+-DEF_HELPER_3(vfp_toulh_round_to_zero, i32, f16, i32, fpst)
+-DEF_HELPER_3(vfp_toshs_round_to_zero, i32, f32, i32, fpst)
+-DEF_HELPER_3(vfp_tosls_round_to_zero, i32, f32, i32, fpst)
+-DEF_HELPER_3(vfp_touhs_round_to_zero, i32, f32, i32, fpst)
+-DEF_HELPER_3(vfp_touls_round_to_zero, i32, f32, i32, fpst)
+-DEF_HELPER_3(vfp_toshd_round_to_zero, i64, f64, i32, fpst)
+-DEF_HELPER_3(vfp_tosld_round_to_zero, i64, f64, i32, fpst)
+-DEF_HELPER_3(vfp_tosqd_round_to_zero, i64, f64, i32, fpst)
+-DEF_HELPER_3(vfp_touhd_round_to_zero, i64, f64, i32, fpst)
+-DEF_HELPER_3(vfp_tould_round_to_zero, i64, f64, i32, fpst)
+-DEF_HELPER_3(vfp_touqd_round_to_zero, i64, f64, i32, fpst)
+-DEF_HELPER_3(vfp_touhh, i32, f16, i32, fpst)
+-DEF_HELPER_3(vfp_toshh, i32, f16, i32, fpst)
+-DEF_HELPER_3(vfp_toulh, i32, f16, i32, fpst)
+-DEF_HELPER_3(vfp_toslh, i32, f16, i32, fpst)
+-DEF_HELPER_3(vfp_touqh, i64, f16, i32, fpst)
+-DEF_HELPER_3(vfp_tosqh, i64, f16, i32, fpst)
+-DEF_HELPER_3(vfp_toshs, i32, f32, i32, fpst)
+-DEF_HELPER_3(vfp_tosls, i32, f32, i32, fpst)
+-DEF_HELPER_3(vfp_tosqs, i64, f32, i32, fpst)
+-DEF_HELPER_3(vfp_touhs, i32, f32, i32, fpst)
+-DEF_HELPER_3(vfp_touls, i32, f32, i32, fpst)
+-DEF_HELPER_3(vfp_touqs, i64, f32, i32, fpst)
+-DEF_HELPER_3(vfp_toshd, i64, f64, i32, fpst)
+-DEF_HELPER_3(vfp_tosld, i64, f64, i32, fpst)
+-DEF_HELPER_3(vfp_tosqd, i64, f64, i32, fpst)
+-DEF_HELPER_3(vfp_touhd, i64, f64, i32, fpst)
+-DEF_HELPER_3(vfp_tould, i64, f64, i32, fpst)
+-DEF_HELPER_3(vfp_touqd, i64, f64, i32, fpst)
+-DEF_HELPER_3(vfp_shtos, f32, i32, i32, fpst)
+-DEF_HELPER_3(vfp_sltos, f32, i32, i32, fpst)
+-DEF_HELPER_3(vfp_sqtos, f32, i64, i32, fpst)
+-DEF_HELPER_3(vfp_uhtos, f32, i32, i32, fpst)
+-DEF_HELPER_3(vfp_ultos, f32, i32, i32, fpst)
+-DEF_HELPER_3(vfp_uqtos, f32, i64, i32, fpst)
+-DEF_HELPER_3(vfp_shtod, f64, i64, i32, fpst)
+-DEF_HELPER_3(vfp_sltod, f64, i64, i32, fpst)
+-DEF_HELPER_3(vfp_sqtod, f64, i64, i32, fpst)
+-DEF_HELPER_3(vfp_uhtod, f64, i64, i32, fpst)
+-DEF_HELPER_3(vfp_ultod, f64, i64, i32, fpst)
+-DEF_HELPER_3(vfp_uqtod, f64, i64, i32, fpst)
+-DEF_HELPER_3(vfp_shtoh, f16, i32, i32, fpst)
+-DEF_HELPER_3(vfp_uhtoh, f16, i32, i32, fpst)
+-DEF_HELPER_3(vfp_sltoh, f16, i32, i32, fpst)
+-DEF_HELPER_3(vfp_ultoh, f16, i32, i32, fpst)
+-DEF_HELPER_3(vfp_sqtoh, f16, i64, i32, fpst)
+-DEF_HELPER_3(vfp_uqtoh, f16, i64, i32, fpst)
+-
+-DEF_HELPER_3(vfp_shtos_round_to_nearest, f32, i32, i32, fpst)
+-DEF_HELPER_3(vfp_sltos_round_to_nearest, f32, i32, i32, fpst)
+-DEF_HELPER_3(vfp_uhtos_round_to_nearest, f32, i32, i32, fpst)
+-DEF_HELPER_3(vfp_ultos_round_to_nearest, f32, i32, i32, fpst)
+-DEF_HELPER_3(vfp_shtod_round_to_nearest, f64, i64, i32, fpst)
+-DEF_HELPER_3(vfp_sltod_round_to_nearest, f64, i64, i32, fpst)
+-DEF_HELPER_3(vfp_uhtod_round_to_nearest, f64, i64, i32, fpst)
+-DEF_HELPER_3(vfp_ultod_round_to_nearest, f64, i64, i32, fpst)
+-DEF_HELPER_3(vfp_shtoh_round_to_nearest, f16, i32, i32, fpst)
+-DEF_HELPER_3(vfp_uhtoh_round_to_nearest, f16, i32, i32, fpst)
+-DEF_HELPER_3(vfp_sltoh_round_to_nearest, f16, i32, i32, fpst)
+-DEF_HELPER_3(vfp_ultoh_round_to_nearest, f16, i32, i32, fpst)
++DEF_HELPER_FLAGS_2(vfp_uitoh, TCG_CALL_NO_RWG, f16, i32, fpst)
++DEF_HELPER_FLAGS_2(vfp_uitos, TCG_CALL_NO_RWG, f32, i32, fpst)
++DEF_HELPER_FLAGS_2(vfp_uitod, TCG_CALL_NO_RWG, f64, i32, fpst)
++DEF_HELPER_FLAGS_2(vfp_sitoh, TCG_CALL_NO_RWG, f16, i32, fpst)
++DEF_HELPER_FLAGS_2(vfp_sitos, TCG_CALL_NO_RWG, f32, i32, fpst)
++DEF_HELPER_FLAGS_2(vfp_sitod, TCG_CALL_NO_RWG, f64, i32, fpst)
++
++DEF_HELPER_FLAGS_2(vfp_touih, TCG_CALL_NO_RWG, i32, f16, fpst)
++DEF_HELPER_FLAGS_2(vfp_touis, TCG_CALL_NO_RWG, i32, f32, fpst)
++DEF_HELPER_FLAGS_2(vfp_touid, TCG_CALL_NO_RWG, i32, f64, fpst)
++DEF_HELPER_FLAGS_2(vfp_touizh, TCG_CALL_NO_RWG, i32, f16, fpst)
++DEF_HELPER_FLAGS_2(vfp_touizs, TCG_CALL_NO_RWG, i32, f32, fpst)
++DEF_HELPER_FLAGS_2(vfp_touizd, TCG_CALL_NO_RWG, i32, f64, fpst)
++DEF_HELPER_FLAGS_2(vfp_tosih, TCG_CALL_NO_RWG, s32, f16, fpst)
++DEF_HELPER_FLAGS_2(vfp_tosis, TCG_CALL_NO_RWG, s32, f32, fpst)
++DEF_HELPER_FLAGS_2(vfp_tosid, TCG_CALL_NO_RWG, s32, f64, fpst)
++DEF_HELPER_FLAGS_2(vfp_tosizh, TCG_CALL_NO_RWG, s32, f16, fpst)
++DEF_HELPER_FLAGS_2(vfp_tosizs, TCG_CALL_NO_RWG, s32, f32, fpst)
++DEF_HELPER_FLAGS_2(vfp_tosizd, TCG_CALL_NO_RWG, s32, f64, fpst)
++
++DEF_HELPER_FLAGS_3(vfp_toshh_round_to_zero, TCG_CALL_NO_RWG, i32, f16, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_toslh_round_to_zero, TCG_CALL_NO_RWG, i32, f16, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_touhh_round_to_zero, TCG_CALL_NO_RWG, i32, f16, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_toulh_round_to_zero, TCG_CALL_NO_RWG, i32, f16, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_toshs_round_to_zero, TCG_CALL_NO_RWG, i32, f32, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_tosls_round_to_zero, TCG_CALL_NO_RWG, i32, f32, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_touhs_round_to_zero, TCG_CALL_NO_RWG, i32, f32, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_touls_round_to_zero, TCG_CALL_NO_RWG, i32, f32, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_toshd_round_to_zero, TCG_CALL_NO_RWG, i64, f64, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_tosld_round_to_zero, TCG_CALL_NO_RWG, i64, f64, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_tosqd_round_to_zero, TCG_CALL_NO_RWG, i64, f64, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_touhd_round_to_zero, TCG_CALL_NO_RWG, i64, f64, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_tould_round_to_zero, TCG_CALL_NO_RWG, i64, f64, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_touqd_round_to_zero, TCG_CALL_NO_RWG, i64, f64, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_touhh, TCG_CALL_NO_RWG, i32, f16, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_toshh, TCG_CALL_NO_RWG, i32, f16, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_toulh, TCG_CALL_NO_RWG, i32, f16, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_toslh, TCG_CALL_NO_RWG, i32, f16, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_touqh, TCG_CALL_NO_RWG, i64, f16, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_tosqh, TCG_CALL_NO_RWG, i64, f16, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_toshs, TCG_CALL_NO_RWG, i32, f32, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_tosls, TCG_CALL_NO_RWG, i32, f32, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_tosqs, TCG_CALL_NO_RWG, i64, f32, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_touhs, TCG_CALL_NO_RWG, i32, f32, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_touls, TCG_CALL_NO_RWG, i32, f32, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_touqs, TCG_CALL_NO_RWG, i64, f32, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_toshd, TCG_CALL_NO_RWG, i64, f64, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_tosld, TCG_CALL_NO_RWG, i64, f64, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_tosqd, TCG_CALL_NO_RWG, i64, f64, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_touhd, TCG_CALL_NO_RWG, i64, f64, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_tould, TCG_CALL_NO_RWG, i64, f64, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_touqd, TCG_CALL_NO_RWG, i64, f64, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_shtos, TCG_CALL_NO_RWG, f32, i32, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_sltos, TCG_CALL_NO_RWG, f32, i32, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_sqtos, TCG_CALL_NO_RWG, f32, i64, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_uhtos, TCG_CALL_NO_RWG, f32, i32, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_ultos, TCG_CALL_NO_RWG, f32, i32, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_uqtos, TCG_CALL_NO_RWG, f32, i64, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_shtod, TCG_CALL_NO_RWG, f64, i64, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_sltod, TCG_CALL_NO_RWG, f64, i64, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_sqtod, TCG_CALL_NO_RWG, f64, i64, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_uhtod, TCG_CALL_NO_RWG, f64, i64, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_ultod, TCG_CALL_NO_RWG, f64, i64, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_uqtod, TCG_CALL_NO_RWG, f64, i64, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_shtoh, TCG_CALL_NO_RWG, f16, i32, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_uhtoh, TCG_CALL_NO_RWG, f16, i32, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_sltoh, TCG_CALL_NO_RWG, f16, i32, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_ultoh, TCG_CALL_NO_RWG, f16, i32, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_sqtoh, TCG_CALL_NO_RWG, f16, i64, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_uqtoh, TCG_CALL_NO_RWG, f16, i64, i32, fpst)
++
++DEF_HELPER_FLAGS_3(vfp_shtos_round_to_nearest, TCG_CALL_NO_RWG, f32, i32, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_sltos_round_to_nearest, TCG_CALL_NO_RWG, f32, i32, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_uhtos_round_to_nearest, TCG_CALL_NO_RWG, f32, i32, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_ultos_round_to_nearest, TCG_CALL_NO_RWG, f32, i32, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_shtod_round_to_nearest, TCG_CALL_NO_RWG, f64, i64, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_sltod_round_to_nearest, TCG_CALL_NO_RWG, f64, i64, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_uhtod_round_to_nearest, TCG_CALL_NO_RWG, f64, i64, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_ultod_round_to_nearest, TCG_CALL_NO_RWG, f64, i64, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_shtoh_round_to_nearest, TCG_CALL_NO_RWG, f16, i32, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_uhtoh_round_to_nearest, TCG_CALL_NO_RWG, f16, i32, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_sltoh_round_to_nearest, TCG_CALL_NO_RWG, f16, i32, i32, fpst)
++DEF_HELPER_FLAGS_3(vfp_ultoh_round_to_nearest, TCG_CALL_NO_RWG, f16, i32, i32, fpst)
+ 
+ DEF_HELPER_FLAGS_2(set_rmode, TCG_CALL_NO_RWG, i32, i32, fpst)
+ 
+@@ -244,9 +244,9 @@
+ DEF_HELPER_FLAGS_3(vfp_fcvt_f16_to_f64, TCG_CALL_NO_RWG, f64, f16, fpst, i32)
+ DEF_HELPER_FLAGS_3(vfp_fcvt_f64_to_f16, TCG_CALL_NO_RWG, f16, f64, fpst, i32)
+ 
+-DEF_HELPER_4(vfp_muladdd, f64, f64, f64, f64, fpst)
+-DEF_HELPER_4(vfp_muladds, f32, f32, f32, f32, fpst)
+-DEF_HELPER_4(vfp_muladdh, f16, f16, f16, f16, fpst)
++DEF_HELPER_FLAGS_4(vfp_muladdd, TCG_CALL_NO_RWG, f64, f64, f64, f64, fpst)
++DEF_HELPER_FLAGS_4(vfp_muladds, TCG_CALL_NO_RWG, f32, f32, f32, f32, fpst)
++DEF_HELPER_FLAGS_4(vfp_muladdh, TCG_CALL_NO_RWG, f16, f16, f16, f16, fpst)
+ 
+ DEF_HELPER_FLAGS_2(recpe_f16, TCG_CALL_NO_RWG, f16, f16, fpst)
+ DEF_HELPER_FLAGS_2(recpe_f32, TCG_CALL_NO_RWG, f32, f32, fpst)
+--- a/accel/tcg/translator.c
++++ b/accel/tcg/translator.c
+@@ -115,8 +115,18 @@
+         return false;
+     }
+ 
++#if defined(CONFIG_USER_ONLY) || defined(NOVA3_FAST_LOOKUP)
++    /*
++     * SHADOWGUN build: user mode has one flat address space with no virtual-to-physical remapping, and
++     * tb_phys_invalidate() unlinks every incoming jump of a TB it drops, so a direct jump may chain to a TB on
++     * another page (QEMU's own targets did this until the check moved here). Without it every bl/b that crosses
++     * a 4 KiB boundary - most calls in a large C++ engine - went through lookup_tb_ptr instead of being chained.
++     */
++    return true;
++#else
+     /* Check for the dest on the same page as the start of the TB.  */
+     return translator_is_same_page(db, dest);
++#endif
+ }
+ 
+ void translator_loop(CPUState *cpu, TranslationBlock *tb, int *max_insns,
+--- a/meson.build
++++ b/meson.build
+@@ -685,30 +685,11 @@
+ # Check further flags that make QEMU more robust against malicious parties
+ 
+ hardening_flags = [
+-    # Initialize all stack variables to zero. This makes
+-    # it harder to take advantage of uninitialized stack
+-    # data to drive exploits
+-    '-ftrivial-auto-var-init=zero',
+-    # Ensure GCC zero-initializes padding bits and trailing fields in
+-    # unions. This avoids potentially leaking host data into the guest
+-    # when we init a struct and copy it into guest memory.  GCC prior
+-    # to GCC 15 and clang don't have this, but they zero the padding
+-    # and trailing portions of a union by default.
+-    '-fzero-init-padding-bits=all',
++    # SHADOWGUN build: none of QEMU's anti-exploit flags (zero-init of every stack variable, zeroing of all
++    # call-used registers after every function return). The helpers run ~100M calls/s here and each return
++    # paid up to 16 extra MOVs; this build runs only our own game.
+ ]
+ 
+-# Zero out registers used during a function call
+-# upon its return. This makes it harder to assemble
+-# ROP gadgets into something usable
+-#
+-# NB: Clang 17 is broken and SEGVs
+-# https://github.com/llvm/llvm-project/issues/75168
+-if cc.compiles('extern struct { void (*cb)(void); } s; void f(void) { s.cb(); }',
+-               name: '-fzero-call-used-regs=used-gpr',
+-               args: ['-O2', '-fzero-call-used-regs=used-gpr'])
+-    hardening_flags += '-fzero-call-used-regs=used-gpr'
+-endif
+-
+ qemu_common_flags += hardening_flags
+ 
+ # Collect warning flags we want to set, sorted alphabetically

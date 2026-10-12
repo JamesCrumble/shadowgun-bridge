@@ -1,0 +1,23 @@
+# Local toolchains and downloads (never committed)
+/android-sdk
+/jdk
+/downloads/
+/sdl-arm
+# Game data is the player's own (Madfinger Games)
+/gamebin/
+/sgdata/
+/extracted/
+/extracted_ae/
+# Runtime, logs, scratch
+/ctl/
+/logs/
+/scratch/
+/release/
+/build/
+__pycache__/
+*.apk
+*.idsig
+/qemu/out/
+/apk/build/
+/qemu-src/
+/qemu/obj-*/

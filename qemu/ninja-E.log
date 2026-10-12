@@ -1,0 +1,48 @@
+[1/5] Generating qemu-version.h with a custom command (wrapped by meson to capture output)
+[2/4] Compiling C object libuser.a.p/accel_tcg_translator.c.o
+In file included from ../../qemu-src/qemu-11.1.2/accel/tcg/translator.c:11:
+In function 'stq_he_p',
+    inlined from 'translator_ld' at ../../qemu-src/qemu-11.1.2/accel/tcg/translator.c:370:13,
+    inlined from 'translator_lduw_end' at ../../qemu-src/qemu-11.1.2/accel/tcg/translator.c:493:10:
+/work/qemu-src/qemu-11.1.2/include/qemu/bswap.h:296:5: warning: array subscript 'long unsigned int[0]' is partly outside array bounds of 'void[2]' [-Warray-bounds]
+  296 |     __builtin_memcpy(ptr, &v, sizeof(v));
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../../qemu-src/qemu-11.1.2/accel/tcg/translator.c: In function 'translator_lduw_end':
+../../qemu-src/qemu-11.1.2/accel/tcg/translator.c:491:14: note: object 'val' of size 2
+  491 |     uint16_t val;
+      |              ^~~
+../../qemu-src/qemu-11.1.2/accel/tcg/translator.c:491:14: note: at offset [1, 2] into object 'val' of size 2
+../../qemu-src/qemu-11.1.2/accel/tcg/translator.c:491:14: note: object 'val' of size 2
+../../qemu-src/qemu-11.1.2/accel/tcg/translator.c:491:14: note: at offset [1, 2] into object 'val' of size 2
+In function 'stl_he_p',
+    inlined from 'translator_ld' at ../../qemu-src/qemu-11.1.2/accel/tcg/translator.c:363:13,
+    inlined from 'translator_lduw_end' at ../../qemu-src/qemu-11.1.2/accel/tcg/translator.c:493:10:
+/work/qemu-src/qemu-11.1.2/include/qemu/bswap.h:284:5: warning: array subscript 'unsigned int[0]' is partly outside array bounds of 'void[2]' [-Warray-bounds]
+  284 |     __builtin_memcpy(ptr, &v, sizeof(v));
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../../qemu-src/qemu-11.1.2/accel/tcg/translator.c: In function 'translator_lduw_end':
+../../qemu-src/qemu-11.1.2/accel/tcg/translator.c:491:14: note: object 'val' of size 2
+  491 |     uint16_t val;
+      |              ^~~
+../../qemu-src/qemu-11.1.2/accel/tcg/translator.c:491:14: note: at offset [1, 2] into object 'val' of size 2
+../../qemu-src/qemu-11.1.2/accel/tcg/translator.c:491:14: note: object 'val' of size 2
+../../qemu-src/qemu-11.1.2/accel/tcg/translator.c:491:14: note: at offset [1, 2] into object 'val' of size 2
+In function 'stq_he_p',
+    inlined from 'translator_ld' at ../../qemu-src/qemu-11.1.2/accel/tcg/translator.c:370:13,
+    inlined from 'translator_ldl_end' at ../../qemu-src/qemu-11.1.2/accel/tcg/translator.c:509:10:
+/work/qemu-src/qemu-11.1.2/include/qemu/bswap.h:296:5: warning: array subscript 'long unsigned int[0]' is partly outside array bounds of 'void[4]' [-Warray-bounds]
+  296 |     __builtin_memcpy(ptr, &v, sizeof(v));
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../../qemu-src/qemu-11.1.2/accel/tcg/translator.c: In function 'translator_ldl_end':
+../../qemu-src/qemu-11.1.2/accel/tcg/translator.c:507:14: note: object 'val' of size 4
+  507 |     uint32_t val;
+      |              ^~~
+../../qemu-src/qemu-11.1.2/accel/tcg/translator.c:507:14: note: at offset [1, 4] into object 'val' of size 4
+../../qemu-src/qemu-11.1.2/accel/tcg/translator.c:507:14: note: object 'val' of size 4
+../../qemu-src/qemu-11.1.2/accel/tcg/translator.c:507:14: note: at offset [1, 4] into object 'val' of size 4
+[3/4] Compiling C object libqemu-arm-linux-user.a.p/target_arm_tcg_translate.c.o
+[4/4] Linking target qemu-arm
+/usr/lib/gcc-cross/aarch64-linux-gnu/12/../../../../aarch64-linux-gnu/bin/ld: /usr/lib/aarch64-linux-gnu/libglib-2.0.a(gutils.c.o): in function `g_get_user_database_entry':
+(.text+0x294): warning: Using 'getpwuid' in statically linked applications requires at runtime the shared libraries from the glibc version used for linking
+/usr/lib/gcc-cross/aarch64-linux-gnu/12/../../../../aarch64-linux-gnu/bin/ld: (.text+0xf0): warning: Using 'getpwnam_r' in statically linked applications requires at runtime the shared libraries from the glibc version used for linking
+/usr/lib/gcc-cross/aarch64-linux-gnu/12/../../../../aarch64-linux-gnu/bin/ld: (.text+0x124): warning: Using 'getpwuid_r' in statically linked applications requires at runtime the shared libraries from the glibc version used for linking
