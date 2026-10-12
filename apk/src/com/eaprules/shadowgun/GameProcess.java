@@ -516,7 +516,8 @@ final class GameProcess {
         appendLog("[wrapper] " + b.command());
         process = b.start();
         final Process p = process;
-        perf.start(p, !"0".equals(settings.get("PERF_HINT")));
+        perf.spread = "1".equals(settings.get("CPU_SPREAD"));
+        perf.start(p, !"0".equals(settings.get("PERF_HINT")), intSetting(settings, "FPS_LIMIT", 120));
         new Thread(this::writerLoop, "me-commands").start();
         new Thread(this::injectLoop, "me-inject").start();
         new Thread(this::audioLoop, "me-audio").start();

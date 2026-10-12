@@ -16,13 +16,15 @@ import java.util.regex.Pattern;
  * The emulated game is one busy thread in the qemu child process, and nothing about a child process
  * reads as "game" to the scheduler: on the phone it was left on a mid core with the prime cluster capped
  * at a quarter of its clock. A PerformanceHintManager session over qemu's threads, fed the real frame
- * time against a 60 fps target, is the documented way to ask for more. Sessions over another process's
+ * time against the frame limit's period, is the documented way to ask for more. The target has to be the
+ * rate the game is aiming for: with a fixed 60 fps target and a 90 fps limit the system saw 11 ms frames
+ * against 16.7 ms, took that as headroom and clocked the cores down until the game ran at ~60-65 fps. Sessions over another process's
  * threads are accepted for the same uid on recent Android; where they are not, this logs and does nothing.
  */
 final class PerfHint {
     interface Log { void log(String s); }
 
-    private static final long TARGET_NS = 16_666_667L;
+    private long targetNs = 16_666_667L;
 
     private final Context ctx;
     private final Log log;
@@ -49,12 +51,58 @@ final class PerfHint {
         }
     }
 
-    void start(Process p, boolean adpf) {
+    /**
+     * CPU_SPREAD=1: qemu is started on the two prime cores, and with the engine, its job worker, the gfx thread,
+     * audio and the rest all there the two that matter get preempted. Everything except the engine and the job
+     * worker is moved to cores 0-5.
+     */
+    boolean spread;
+    private final java.util.Set<Integer> moved = new java.util.HashSet<>();
+
+    private void spreadLoop() {
+        try {
+            int n = 0, failed = 0;
+            while (new File("/proc/" + pid).exists()) {
+                for (int tid : threads()) {
+                    if (tid == pid || moved.contains(tid)) continue;
+                    String comm;
+                    try { comm = readFirstLine("/proc/" + pid + "/task/" + tid + "/comm").trim(); } catch (java.io.IOException e) { continue; }
+                    // qemu names guest threads only once the game does; until then they carry qemu's own name.
+                    if (comm.startsWith("UnityMain") || comm.startsWith("Worker Thread") || comm.startsWith("libqemu")) continue;
+                    moved.add(tid);
+                    try {
+                        Process t = new ProcessBuilder("/system/bin/taskset", "-p", "3f", String.valueOf(tid))
+                                .redirectErrorStream(true).start();
+                        while (t.getInputStream().read() >= 0) { }
+                        if (t.waitFor() == 0) n++; else failed++;
+                    } catch (java.io.IOException e) {
+                        failed++;
+                    }
+                }
+                if (n + failed != lastSpread) {
+                    lastSpread = n + failed;
+                    log.log("perf hint: CPU_SPREAD: " + n + " threads moved to cores 0-5, " + failed + " failed");
+                }
+                Thread.sleep(3000);
+            }
+        } catch (InterruptedException ignored) {
+        }
+    }
+
+    private int lastSpread;
+
+    void start(Process p, boolean adpf, int fpsLimit) {
         if (Build.VERSION.SDK_INT < 31) return;
+        if (fpsLimit >= 15 && fpsLimit <= 240) targetNs = 1_000_000_000L / fpsLimit;
         pid = pidOf(p);
         if (pid <= 0) {
             log.log("perf hint: no pid for " + p);
             return;
+        }
+        if (spread) {
+            Thread sp = new Thread(this::spreadLoop, "me-spread");
+            sp.setDaemon(true);
+            sp.start();
         }
         if (!adpf) {
             log.log("perf hint: ADPF session off (settings)");
@@ -105,7 +153,7 @@ final class PerfHint {
                 ((PerformanceHintManager.Session) s).setThreads(tids);
             } else {
                 if (s != null) ((PerformanceHintManager.Session) s).close();
-                session = m.createHintSession(tids, TARGET_NS);
+                session = m.createHintSession(tids, targetNs);
                 // Android 15: do not trade this session's speed for power (API 35, so by reflection).
                 if (session != null && Build.VERSION.SDK_INT >= 35) {
                     try {
@@ -116,7 +164,7 @@ final class PerfHint {
                 }
             }
             log.log("perf hint: session over " + tids.length + " qemu threads: " + (session != null ? "ok" : "refused")
-                    + ", preferred rate " + m.getPreferredUpdateRateNanos() + " ns");
+                    + ", target " + targetNs + " ns, preferred rate " + m.getPreferredUpdateRateNanos() + " ns");
         } catch (RuntimeException e) {
             log.log("perf hint: " + e);
         }
@@ -259,7 +307,7 @@ final class PerfHint {
             PerformanceHintManager.Session ss = (PerformanceHintManager.Session) s;
             ss.reportActualWorkDuration(d);
             // Frames well over target: say the load just went up (API 33), at most twice a second.
-            if (Build.VERSION.SDK_INT >= 33 && d > TARGET_NS + TARGET_NS / 4 && now - lastLoadUp > 500_000_000L) {
+            if (Build.VERSION.SDK_INT >= 33 && d > targetNs + targetNs / 4 && now - lastLoadUp > 500_000_000L) {
                 lastLoadUp = now;
                 loadUp(ss);
             }
