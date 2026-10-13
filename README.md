@@ -92,6 +92,8 @@ Android-телефонах, в которых нет поддержки AArch32.
 - **qemu** (`qemu/`): QEMU 11.1.2 с нашим патчем, см. ниже.
 
 Подробный журнал разработки, выводы и тупиковые ветки — в [PROJECT_STATE.md](PROJECT_STATE.md).
+Пошаговый разбор — что было видно, как нашли причину, что исправили — в
+[docs/PORTING_GUIDE.md](docs/PORTING_GUIDE.md) ([English](docs/PORTING_GUIDE.en.md)).
 
 ## Производительность
 
