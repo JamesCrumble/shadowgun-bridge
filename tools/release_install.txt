@@ -8,9 +8,11 @@ SHADOWGUN (Madfinger Games, v1.7.0, только 32-бит) на 64-битном
 
 1. Установить Shadowgun-Bridge-<версия>.apk (пакет com.jamescrumble.shadowgun).
 
-2. Положить файлы игры (по adb или любым файловым менеджером) в папку
-
-   /sdcard/Android/data/com.jamescrumble.shadowgun/files/
+2. Открыть приложение и разрешить доступ ко всем файлам (приложение предложит само): оно создаст папку
+   /sdcard/BridgeGames/com.jamescrumble.shadowgun/
+   Положить файлы игры (по adb или любым файловым менеджером) в неё. Подойдёт и старая папка
+   /sdcard/Android/data/com.jamescrumble.shadowgun/files/ : читаются обе, а при выданном доступе всё из неё переносится в BridgeGames
+   само. Без доступа приложение работает с папкой в Android/data.
 
        <оригинальный APK игры 1.7.0>.apk
        <данные игры>: cache-архив .zip (внутри main.*.obb) или сам файл main.170200014.com.madfingergames.shadowgun.obb
@@ -18,14 +20,14 @@ SHADOWGUN (Madfinger Games, v1.7.0, только 32-бит) на 64-битном
    Имена файлов не важны, важны расширения: один .apk и один .zip либо .obb.
 
    Пример:
-       adb push Shadowgun-Anniversary-Edition-v1-7-0.apk /sdcard/Android/data/com.jamescrumble.shadowgun/files/
-       adb push Shadowgun-Anniversary-Edition-v1-7-0-cache.zip /sdcard/Android/data/com.jamescrumble.shadowgun/files/
+       adb push Shadowgun-Anniversary-Edition-v1-7-0.apk /sdcard/BridgeGames/com.jamescrumble.shadowgun/
+       adb push Shadowgun-Anniversary-Edition-v1-7-0-cache.zip /sdcard/BridgeGames/com.jamescrumble.shadowgun/
 
 3. Открыть приложение: сначала появятся настройки (лимит кадров, разрешение, привязка к быстрым ядрам,
    многопоточный рендер), кнопка "Играть" запускает игру. Первый запуск дольше: распаковываются sysroot
    (~100 МБ) и данные игры.
 
 Если игра не стартует, причина пишется на экране и в файл
-/sdcard/Android/data/com.jamescrumble.shadowgun/files/shadowgun.log
+/sdcard/BridgeGames/com.jamescrumble.shadowgun/shadowgun.log
 
 Исходники и описание сборки: https://github.com/JamesCrumble/shadowgun-bridge

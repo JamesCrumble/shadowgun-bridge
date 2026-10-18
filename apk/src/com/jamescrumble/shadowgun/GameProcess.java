@@ -62,7 +62,7 @@ final class GameProcess {
     private final File commandsFile;
     private final File statusFile;
     private final File fifo;
-    private final File logFile;
+    private volatile File logFile;
     private final LinkedList<Cmd> queue = new LinkedList<>();
     private volatile boolean running;
     private volatile boolean muted = true;
@@ -79,8 +79,7 @@ final class GameProcess {
         commandsFile = new File(control, "commands");
         statusFile = new File(control, "status.json");
         fifo = new File(root, "audio.pcm");
-        File external = ctx.getExternalFilesDir(null);
-        logFile = new File(external != null ? external : root, "shadowgun.log");
+        logFile = new File(Storage.mainDir(ctx), "shadowgun.log");
         // pad_overlay.flag next to the log brings back the wrapper's own gamepad-style overlay.
         touchMode = !new File(logFile.getParentFile(), "pad_overlay.flag").exists();
         perf = new PerfHint(ctx, msg -> appendLog("[perf] " + msg));
@@ -100,7 +99,7 @@ final class GameProcess {
         try { h = Integer.parseInt(SettingsActivity.load(ctx).getOrDefault("RENDER_HEIGHT", "720")); } catch (NumberFormatException ignored) { }
         h = Math.max(240, Math.min(h, 2160)) & ~1;
         int w = Math.round(h * (float) longSide / shortSide) & ~1;
-        String over = readText(new File(logFile.getParentFile(), "resolution.txt")).trim();
+        String over = readText(Storage.find(ctx, "resolution.txt")).trim();
         java.util.regex.Matcher mt = java.util.regex.Pattern.compile("(\\d+)x(\\d+)").matcher(over);
         if (mt.matches()) {
             w = Integer.parseInt(mt.group(1));
@@ -121,6 +120,11 @@ final class GameProcess {
 
     void start() throws Exception {
         stopStale();
+        // With all-files access everything of Android/data/<package>/files moves to BridgeGames/<package>, which
+        // then becomes the main folder; the log and the settings are looked up there from here on.
+        int moved = Storage.migrate(ctx, listener::onStatus);
+        logFile = new File(Storage.mainDir(ctx), logFile.getName());
+        if (moved > 0) appendLog("[wrapper] moved " + moved + " files to " + Storage.mainDir(ctx));
         String migrated = SaveMigration.importIfPresent(ctx);
         if (migrated != null) appendLog("[wrapper] " + migrated);
         prepare();
@@ -221,11 +225,11 @@ final class GameProcess {
         File libDir = new File(game, NATIVE_DIR);
         libDir.mkdirs();
 
-        File external = ctx.getExternalFilesDir(null);
-        String where = external == null ? "Android/data/" + ctx.getPackageName() + "/files" : external.getPath();
+        File external = Storage.mainDir(ctx);
+        String where = Storage.describe(ctx);
         File ready = new File(game, ".data-ready");
         if (!ready.exists()) {
-            File apk = external == null ? null : firstWithSuffix(external, ".apk");
+            File apk = external == null ? null : Storage.firstWithSuffix(ctx, ".apk");
             if (apk == null) {
                 throw new IOException("Не найден оригинальный APK игры (Shadowgun 1.7.0).\nПоложите его и данные игры (cache-zip или .obb) в папку:\n" + where);
             }
@@ -238,8 +242,8 @@ final class GameProcess {
             new File(game, ".data-patches").delete();
             File obbDir = new File(game, OBB_DIR);
             obbDir.mkdirs();
-            File obb = firstWithSuffix(external, ".obb");
-            File cache = firstWithSuffix(external, ".zip");
+            File obb = Storage.firstWithSuffix(ctx, ".obb");
+            File cache = Storage.firstWithSuffix(ctx, ".zip");
             if (obb != null) {
                 listener.onStatus("Копирование данных игры (~300 МБ)…\nЭто делается один раз.");
                 linkOrCopy(obb, new File(obbDir, obb.getName()));
@@ -252,7 +256,7 @@ final class GameProcess {
             ready.createNewFile();
         }
         java.util.Map<String, String> st = SettingsActivity.load(ctx);
-        applyDataPatches(new File(game, "base.apk"), external == null ? null : firstWithSuffix(external, ".apk"),
+        applyDataPatches(new File(game, "base.apk"), external == null ? null : Storage.firstWithSuffix(ctx, ".apk"),
                 !"0".equals(st.get("MT_RENDERING")), "1".equals(st.get("Q_SHADOWS_OFF")),
                 intSetting(st, "Q_PIXEL_LIGHTS", -1), intSetting(st, "Q_LOD_PERCENT", 100));
     }
@@ -472,7 +476,10 @@ final class GameProcess {
         env.put("SHADOWGUN_NO_CURSOR", "1");
         env.put("SHADOWGUN_TOUCH", "1");
         env.put("SHADOWGUN_SYSTEM_FONT", "/system/fonts/RobotoStatic-Regular.ttf");
-        env.put("SHADOWGUN_SAVEDIR", new File(root, "save").getPath());
+        // Saves go to BridgeGames/<package>/save when there is access (mirrored to the private folder), else private.
+        File saveDir = Storage.saveDir(ctx, new File(root, "save"));
+        appendLog("[wrapper] saves: " + saveDir);
+        env.put("SHADOWGUN_SAVEDIR", saveDir.getPath());
         // An ordinary touch phone to the engine: its own on-screen controls, no PowerA pad until one is used.
         File dir = logFile.getParentFile();
         // engine_env.txt: KEY=VALUE per line, added to the port environment.
@@ -729,13 +736,6 @@ final class GameProcess {
             out.write((line + "\n").getBytes("US-ASCII"));
         } catch (IOException ignored) {
         }
-    }
-
-    private static File firstWithSuffix(File dir, String suffix) {
-        File[] files = dir.listFiles((d, n) -> n.endsWith(suffix));
-        if (files == null || files.length == 0) return null;
-        Arrays.sort(files);
-        return files[0];
     }
 
     private static int intField(String s, String key) {

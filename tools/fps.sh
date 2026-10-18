@@ -2,6 +2,8 @@
 # Waits $1 s (default 0), then prints the last $2 (default 4) bridge stat lines and phase lines.
 P=${SG_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}
 A=$P/tools/adb
-F=/sdcard/Android/data/com.jamescrumble.shadowgun/files/shadowgun.log
+D=/sdcard/BridgeGames/com.jamescrumble.shadowgun
+[ -n "$($A shell ls $D/shadowgun.log 2>/dev/null)" ] || D=/sdcard/Android/data/com.jamescrumble.shadowgun/files
+F=$D/shadowgun.log
 [ "${1:-0}" -gt 0 ] && sleep "$1"
 $A shell "grep -E 'frames [0-9.]+/s|phase=|qemu exited|died' $F | tail -${2:-4}"

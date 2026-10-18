@@ -34,18 +34,22 @@ Android-телефонах, в которых нет поддержки AArch32.
 `Shadowgun-Bridge-<версия>.apk` и `INSTALL.txt`.
 
 1. Установите APK (пакет `com.jamescrumble.shadowgun`).
-2. Положите в `/sdcard/Android/data/com.jamescrumble.shadowgun/files/` два файла: оригинальный APK игры 1.7.0
-   и её данные (cache-архив `.zip` или `main.170200014.com.madfingergames.shadowgun.obb`).
+2. Откройте приложение и разрешите доступ ко всем файлам (оно предложит само): будет создана папка
+   `/sdcard/BridgeGames/com.jamescrumble.shadowgun/`. Положите в неё два файла (подойдёт и старая
+   `Android/data/com.jamescrumble.shadowgun/files/`, читаются обе): оригинальный APK игры 1.7.0 и её данные (cache-архив `.zip` или `main.170200014.com.madfingergames.shadowgun.obb`).
    Имена не важны, важны расширения.
-3. Откройте приложение, при необходимости поменяйте настройки и нажмите «Играть».
+3. Нажмите «Играть» (настройки при необходимости поменяйте).
 
 Первый запуск дольше обычного: распаковываются sysroot (~100 МБ) и данные игры. Если что-то не так, причина
 пишется на экране и в `shadowgun.log` в той же папке.
 
+**Папка BridgeGames.** С доступом ко всем файлам она основная: из `Android/data/com.jamescrumble.shadowgun/files/` туда сами переезжают все файлы
+(APK, кэш, настройки, лог). Читаются обе папки, без доступа всё работает с папкой в `Android/data`. Сохранения игра пишет в `BridgeGames/com.jamescrumble.shadowgun/save`, копия свежих файлов остаётся в приватной папке приложения. Как это устроено и как перенести в другой порт: [docs/STORAGE.md](docs/STORAGE.md).
+
 **Обновление со старого имени пакета.** До версии 0.2 пакет назывался иначе, и для Android это другое приложение:
 поверх оно не обновится. Прогресс переносится так: сборка `APP_ID=<старый пакет> tools/build_install.sh noinstall`
 обновляет старое приложение и на его экране настроек выгружает сохранения в папку `migrate` рядом с файлами игры;
-эту папку нужно переложить в `Android/data/com.jamescrumble.shadowgun/files/`, новое приложение заберёт её при запуске игры.
+эту папку нужно переложить в `BridgeGames/com.jamescrumble.shadowgun/` (или в `Android/data/com.jamescrumble.shadowgun/files/`), новое приложение заберёт её при запуске игры.
 
 ## Настройки
 
