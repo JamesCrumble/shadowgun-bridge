@@ -649,8 +649,13 @@ static void register_game_plugins()
                [](JNIEnv *e, jobject, const jvalue *) {
         static DynObject *pi = NULL;
         if (!pi) {
+            int ver = 170200014;
+            const char *base = strrchr(g_obb.c_str(), '/');
+            base = base ? base + 1 : g_obb.c_str();
+            if (strncmp(base, "main.", 5) == 0 && atoi(base + 5) > 0)
+                ver = atoi(base + 5);
             pi = (DynObject *)dyn_new("android/content/pm/PackageInfo");
-            pi->fields["versionCode"] = JI(170200014);
+            pi->fields["versionCode"] = JI(ver);
             pi->fields["versionName"] = JS(e, "1.7.0");
             pi->fields["packageName"] = JS(e, kPackage);
         }

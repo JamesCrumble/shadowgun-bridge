@@ -15,7 +15,7 @@ SHADOWGUN (Madfinger Games, v1.7.0, только 32-бит) на 64-битном
    само. Без доступа приложение работает с папкой в Android/data.
 
        <оригинальный APK игры 1.7.0>.apk
-       <данные игры>: cache-архив .zip (внутри main.*.obb) или сам файл main.170200014.com.madfingergames.shadowgun.obb
+       <данные игры>: cache-архив .zip (внутри main.*.obb) или сам файл main.*.com.madfingergames.shadowgun.obb
 
    Имена файлов не важны, важны расширения: один .apk и один .zip либо .obb.
 

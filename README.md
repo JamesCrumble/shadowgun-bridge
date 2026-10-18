@@ -36,7 +36,7 @@ Android-телефонах, в которых нет поддержки AArch32.
 1. Установите APK (пакет `com.jamescrumble.shadowgun`).
 2. Откройте приложение и разрешите доступ ко всем файлам (оно предложит само): будет создана папка
    `/sdcard/BridgeGames/com.jamescrumble.shadowgun/`. Положите в неё два файла (подойдёт и старая
-   `Android/data/com.jamescrumble.shadowgun/files/`, читаются обе): оригинальный APK игры 1.7.0 и её данные (cache-архив `.zip` или `main.170200014.com.madfingergames.shadowgun.obb`).
+   `Android/data/com.jamescrumble.shadowgun/files/`, читаются обе): оригинальный APK игры 1.7.0 и её данные (cache-архив `.zip` или `main.*.com.madfingergames.shadowgun.obb`).
    Имена не важны, важны расширения.
 3. Нажмите «Играть» (настройки при необходимости поменяйте).
 
