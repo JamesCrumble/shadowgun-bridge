@@ -1,8 +1,9 @@
-# Local toolchains and downloads (never committed)
-/android-sdk
-/jdk
+# Third-party toolchains/sources/downloads: the project may hold a local copy (it takes precedence), by default they come from ../__shared-third-party__
+/android-sdk/
+/jdk/
+/sdl-arm/
 /downloads/
-/sdl-arm
+/qemu-src/
 # Game data is the player's own (Madfinger Games)
 /gamebin/
 /sgdata/
@@ -19,5 +20,4 @@ __pycache__/
 *.idsig
 /qemu/out/
 /apk/build/
-/qemu-src/
 /qemu/obj-*/

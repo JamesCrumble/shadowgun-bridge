@@ -2,7 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SDK="${ANDROID_SDK_ROOT:-$ROOT/android-sdk}"
+tp() { [ -e "$ROOT/${2:-$1}" ] && echo "$ROOT/${2:-$1}" || echo "${SHARED_3P:-$ROOT/../__shared-third-party__}/$1"; }  # third-party: this project first, then ../__shared-third-party__
+SDK="${ANDROID_SDK_ROOT:-$(tp android-sdk)}"
 BT="$SDK/build-tools/34.0.0"
 PLATFORM="$SDK/platforms/android-34/android.jar"
 OUT="$ROOT/apk/build/apk"

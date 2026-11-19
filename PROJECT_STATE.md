@@ -41,7 +41,7 @@
 `Android/obb/com.madfingergames.shadowgun/main.170200014.com.madfingergames.shadowgun.obb`, `files/`, `cache/`.
 
 ## Сборка и запуск
-- `./build.sh` -> `build/shadowgun` (armhf). `jdk/ android-sdk/ sdl-arm/` — симлинки на соседний проект.
+- `./build.sh` -> `build/shadowgun` (armhf). `jdk/ android-sdk/ sdl-arm/` — в общей папке `../__shared-third-party__` (симлинки убраны).
 - Локально на ПК (qemu-arm хоста + Mesa llvmpipe, медленно): `tools/run_local.sh [сек]`, лог `logs/local.log`,
   скриншоты `ctl/shot_*.bmp` каждые `SHADOWGUN_SHOT_EVERY` кадров (`tools/bmp2png.py`), дайджест — `tools/iter_local.sh`.
 - APK: `tools/build_install.sh [noinstall]` -> `Shadowgun-Bridge-debug.apk` (пакет `com.jamescrumble.shadowgun`).
@@ -84,7 +84,7 @@
 | E3: cross-page goto_tb chaining (`translator_use_goto_tb`) | **41.4-42.2** | 73% |
 
 - Патч qemu: `qemu/patches/shadowgun_fast_vfp.patch`, описание и тесты (`cmptest` d6137e57, `fptest` 94e3b209) в `qemu/README.md`.
-  Сборка: `qemu/build_variant.sh E` (Docker `nova3-qemu-build`, исходники `qemu-src/`, не в git).
+  Сборка: `qemu/build_variant.sh E` (Docker `nova3-qemu-build`, исходники `../__shared-third-party__/qemu-src/shadowgun-probe/`, не в git).
 - Env-переключатели: `QEMU_STRICT_FP=1` (отключает быстрый FP и inline vcmp), `SHADOWGUN_INLINE_LOOKUP=1` (inline-проба jump cache,
   по умолчанию выкл: прироста не дала, работа переехала в JIT-код).
 - Диагностика: `SHADOWGUN_PC_PROF=1` (`src/pc_prof.cpp`, разбор `tools/pcprof.py`), `src/syscall_prof.cpp`, телеметрия потоков

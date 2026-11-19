@@ -147,11 +147,11 @@ AArch64-хост (подробно в [qemu/README.md](qemu/README.md)):
 
 Сборка идёт в WSL (Ubuntu).
 
-Нужны, кладутся в корень проекта и в git не входят:
+Нужны (в git не входят; `jdk`, `android-sdk`, `sdl-arm` лежат в общей папке `../__shared-third-party__`, её используют все проекты; если такая папка есть в корне проекта, приоритет у неё — так ищут и `env.sh`, и скрипты):
 
-- `jdk/` — JDK 17;
-- `android-sdk/` — build-tools 34.0.0, platform 34, platform-tools;
-- `sdl-arm/` — SDL2 под armhf (исходники в `third_party/SDL2-2.0.22.tar.gz`);
+- `../__shared-third-party__/jdk/` — JDK 17;
+- `../__shared-third-party__/android-sdk/` — build-tools 34.0.0, platform 34, platform-tools;
+- `../__shared-third-party__/sdl-arm/` — SDL2 под armhf (исходники в `third_party/SDL2-2.0.22.tar.gz` проекта);
 - системный armhf-тулчейн (`gcc-arm-linux-gnueabihf`, `g++-arm-linux-gnueabihf`) и Docker для qemu;
 - `gamebin/` — ваши файлы игры: APK версии 1.7.0 и её данные (cache-архив `.zip` или `main.*.obb`).
   Из APK при сборке берётся значок приложения; оба файла затем кладутся на телефон (см. [Установка](#установка));
@@ -171,19 +171,19 @@ tools/run_local.sh 60              # запуск на ПК (qemu-arm хоста
 
 ### qemu
 
-Исходники QEMU 11.1.2 распаковываются в `qemu-src/qemu-11.1.2`, на них по порядку накладываются
+Исходники QEMU 11.1.2 распаковываются в `../__shared-third-party__/qemu-src/shadowgun-probe/qemu-11.1.2`, на них по порядку накладываются
 `qemu/patches/nova3.patch`, `neon_nofpcr.patch` и `shadowgun_fast_vfp.patch`.
 
 ```sh
 docker build -t shadowgun-qemu-build qemu
-docker run --rm -u 1000:1000 -e HOME=/tmp -v "$PWD":/work shadowgun-qemu-build \
+docker run --rm -u 1000:1000 -e HOME=/tmp -v "$PWD":/work -v "$PWD/../__shared-third-party__/qemu-src/$(basename "$PWD")":/qemu-src shadowgun-qemu-build \
   bash /work/qemu/build_variant.sh E \
   '-DNOVA3_JMP_BITS=16 -DNOVA3_FAST_LOOKUP -DNOVA3_NEON_NOFPCR -O3 -march=armv8.2-a+lse+rcpc+dotprod -mtune=neoverse-v1'
 ```
 
 Результат — `qemu/out/qemu-arm-E.stripped`, его забирает сборка APK. Не добавляйте SVE в `-march`: у ядер Oryon
 его нет. Имена файлов патчей и макросов `NOVA3_*` исторические, менять их не нужно. Наложение трёх патчей
-на чистые исходники с нуля не перепроверялось: рабочее дерево `qemu-src` велось правками по ходу разработки.
+на чистые исходники с нуля не перепроверялось: рабочее дерево `../__shared-third-party__/qemu-src/shadowgun-probe` велось правками по ходу разработки.
 
 ## Диагностика
 
